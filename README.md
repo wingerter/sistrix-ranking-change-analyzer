@@ -1,4 +1,4 @@
-# Sistrix SEO Drop Analyzer Pro 📉🚀
+# Sistrix Ranking Changes Analyzer
 
 Ein interaktives Streamlit-Dashboard zur tiefgehenden Analyse von Sistrix-Keyword-Exporten. 
 Dieses Tool geht über das reine Zählen von Rankings hinaus: Es bewertet Abstürze nach ihrem **echten Traffic-Verlust** (via CTR-Modell), berechnet den **monetären Impact** und identifiziert **Low Hanging Fruits** für schnelle SEO-Wins.
@@ -10,9 +10,9 @@ Dieses Tool geht über das reine Zählen von Rankings hinaus: Es bewertet Abstü
 - **Monetärer Impact (Traffic Value):** Multipliziert verlorene Klicks mit dem jeweiligen Keyword-CPC (Cost per Click), um das AdWords-Äquivalent in Euro darzustellen.
 - **Strategische Dashboards:**
   - 📂 **Verzeichnis-Analyse:** Zeigt an, welche Website-Bereiche am meisten Traffic verloren haben.
+  - 📊 **Keyword-Veränderungen:** Übersichtliche Datentabellen aller Drops (Top 10, Seite 2, Komplette Index-Verluste) als Export-Grundlage.
   - 🍎 **Low Hanging Fruits:** Identifiziert Keywords, die knapp auf Seite 2 (Pos. 11-15) gerutscht sind und leicht zurückerobert werden können.
   - 🏆 **Gewinner:** Hebt neue Seite-1-Rankings hervor.
-  - 📊 **Keyword-Veränderungen:** Übersichtliche Datentabellen aller Drops (Top 10, Seite 2, Komplette Index-Verluste) als Export-Grundlage.
 
 ## 🛠️ Installation
 

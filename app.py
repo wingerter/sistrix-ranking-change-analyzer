@@ -5,9 +5,9 @@ import plotly.graph_objects as go
 from urllib.parse import urlparse
 import io
 
-st.set_page_config(page_title="Sistrix SEO Analyzer", layout="wide")
+st.set_page_config(page_title="Sistrix Ranking Changes Analyzer", layout="wide")
 
-st.title("Sistrix SEO Drop Analyzer Pro")
+st.title("Sistrix Ranking Changes Analyzer")
 st.markdown("Lade deinen Sistrix-Vergleichsexport hoch und analysiere Keyword-Verluste, Traffic-Impact und Quick Wins.")
 
 # Sidebar - Settings
@@ -163,10 +163,10 @@ if uploaded_file is not None and st.session_state['analyzed']:
     st.header("Visualisierungen")
     
     tab1, tab2, tab3, tab4 = st.tabs([
-        "Verzeichnis-Analyse", 
+        "Verzeichnis-Analyse",
+        "Keyword-Veränderungen", 
         "Low Hanging Fruits", 
-        "Gewinner",
-        "Keyword-Veränderungen"
+        "Gewinner"
     ])
     
     with tab1:
@@ -186,32 +186,8 @@ if uploaded_file is not None and st.session_state['analyzed']:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Keine Daten vorhanden.")
-            
-    with tab2:
-        st.subheader("Low Hanging Fruits (Position 11 - 15)")
-        st.write("Diese Keywords sind knapp auf Seite 2 abgerutscht. Mit kleinen Optimierungen holst du sie schnell zurück!")
-        if not low_hanging.empty:
-            st.dataframe(low_hanging[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory']].sort_values('Traffic Loss', ascending=False))
-        else:
-            st.info("Keine Keywords im Bereich 11-15 gefunden.")
-            
-    with tab3:
-        st.subheader("Gewinner (Neu in den Top 10)")
-        if not winners.empty:
-            st.dataframe(winners[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Gain', 'Directory']].sort_values('Traffic Gain', ascending=False))
-            
-            fig_win = px.scatter(
-                winners, x="Search Volume", y="Position#2", 
-                size="Traffic Gain", color="Directory",
-                hover_name="Keyword", title="Gewinner-Keywords nach Suchvolumen",
-                labels={'Position#2': 'Neue Position'}
-            )
-            fig_win.update_yaxes(autorange="reversed")
-            st.plotly_chart(fig_win, use_container_width=True)
-        else:
-            st.info("Keine neuen Rankings in den Top 10.")
 
-    with tab4:
+    with tab2:
         st.subheader("Alle Abstürze in der Übersicht")
         
         st.markdown("#### 1. Top 10 Drops (Aus Top 10 gerutscht)")
@@ -234,6 +210,31 @@ if uploaded_file is not None and st.session_state['analyzed']:
         st.markdown("#### 3. Komplette Verluste (Aus Top 100 gefallen)")
         st.write(f"Gesamtes betroffenes Suchvolumen: **{int(total_loss['Search Volume'].sum()):,}** (Geschätzter Traffic-Verlust: {int(total_loss['Traffic Loss'].sum()):,})".replace(',', '.'))
         st.dataframe(total_loss[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Directory', 'URL']].sort_values('Search Volume', ascending=False))
+
+    with tab3:
+        st.subheader("Low Hanging Fruits (Position 11 - 15)")
+        st.write("Diese Keywords sind knapp auf Seite 2 abgerutscht. Mit kleinen Optimierungen holst du sie schnell zurück!")
+        if not low_hanging.empty:
+            st.dataframe(low_hanging[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory']].sort_values('Traffic Loss', ascending=False))
+        else:
+            st.info("Keine Keywords im Bereich 11-15 gefunden.")
+            
+    with tab4:
+        st.subheader("Gewinner (Neu in den Top 10)")
+        if not winners.empty:
+            st.dataframe(winners[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Gain', 'Directory']].sort_values('Traffic Gain', ascending=False))
+            
+            fig_win = px.scatter(
+                winners, x="Search Volume", y="Position#2", 
+                size="Traffic Gain", color="Directory",
+                hover_name="Keyword", title="Gewinner-Keywords nach Suchvolumen",
+                labels={'Position#2': 'Neue Position'}
+            )
+            fig_win.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig_win, use_container_width=True)
+        else:
+            st.info("Keine neuen Rankings in den Top 10.")
+
 
 else:
     st.info("Bitte lade eine Sistrix CSV-Datei hoch und klicke auf 'Analysieren'.")
