@@ -215,8 +215,17 @@ if uploaded_file is not None and st.session_state['analyzed']:
         st.subheader("Alle Abstürze in der Übersicht")
         
         st.markdown("#### 1. Top 10 Drops (Aus Top 10 gerutscht)")
-        st.write(f"Gesamtes betroffenes Suchvolumen: **{int(top10_drops['Search Volume'].sum()):,}** (Geschätzter Traffic-Verlust: {int(top10_drops['Traffic Loss'].sum()):,})".replace(',', '.'))
-        st.dataframe(top10_drops[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Directory', 'URL']].sort_values('Search Volume', ascending=False))
+        
+        # Directory Filter
+        available_dirs = sorted(top10_drops['Directory'].unique().tolist())
+        selected_dirs = st.multiselect("Nach Verzeichnis filtern (leer lassen = alle anzeigen):", options=available_dirs, default=[], key="top10_dir_filter")
+        
+        filtered_top10 = top10_drops
+        if selected_dirs:
+            filtered_top10 = top10_drops[top10_drops['Directory'].isin(selected_dirs)]
+            
+        st.write(f"Angezeigtes Suchvolumen: **{int(filtered_top10['Search Volume'].sum()):,}** (Geschätzter Traffic-Verlust: {int(filtered_top10['Traffic Loss'].sum()):,})".replace(',', '.'))
+        st.dataframe(filtered_top10[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Directory', 'URL']].sort_values('Search Volume', ascending=False))
         
         st.markdown("#### 2. Seite 2 Drops (Von Seite 2 weiter nach hinten)")
         st.write(f"Gesamtes betroffenes Suchvolumen: **{int(page2_drops['Search Volume'].sum()):,}** (Geschätzter Traffic-Verlust: {int(page2_drops['Traffic Loss'].sum()):,})".replace(',', '.'))
