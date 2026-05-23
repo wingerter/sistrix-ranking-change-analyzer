@@ -228,3 +228,12 @@ if uploaded_file is not None and st.session_state['analyzed']:
 
 else:
     st.info("Bitte lade eine Sistrix CSV-Datei hoch und klicke auf 'Analysieren'.")
+
+# Footer
+st.markdown("<br><hr>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align: center; color: gray; font-size: 0.9em;'>"
+    "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Made with ❤️ in Munich & Bangkok: <a href='https://seouxindianer.de' target='_blank' style='color: gray; text-decoration: underline;'>seouxindianer.de</a>"
+    "</div>", 
+    unsafe_allow_html=True
+)
