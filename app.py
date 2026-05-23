@@ -4,6 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from urllib.parse import urlparse
 import io
+import re
+from collections import Counter
 
 st.set_page_config(page_title="Sistrix Ranking Changes Analyzer", layout="wide")
 
@@ -18,6 +20,10 @@ uploaded_file = st.sidebar.file_uploader("Sistrix CSV Upload", type=["csv"])
 st.sidebar.subheader("Datumsangaben für die Diagramme")
 date_old = st.sidebar.date_input("Datum für Position#1 (Alt)", value=pd.to_datetime('today') - pd.DateOffset(months=1))
 date_new = st.sidebar.date_input("Datum für Position#2 (Neu)", value=pd.to_datetime('today'))
+
+st.sidebar.subheader("Clustering Einstellungen")
+brand_input = st.sidebar.text_input("Brand-Keywords (kommagetrennt)", value="", help="Keywords, die diese Begriffe enthalten, werden in einem eigenen 'Brand' Cluster gesammelt.")
+num_clusters = st.sidebar.slider("Anzahl der Themen-Cluster", min_value=5, max_value=50, value=20, step=5)
 
 if 'analyzed' not in st.session_state:
     st.session_state['analyzed'] = False
@@ -141,6 +147,51 @@ if uploaded_file is not None and st.session_state['analyzed']:
     # 5. Page 2 Drops
     page2_drops = df[(df['Position#1'] > 10) & (df['Position#1'] <= 20) & (df['Position#2'] > 20)]
     
+    # 6. Keyword Clustering
+    stopwords = set([
+        "und", "oder", "kaufen", "test", "erfahrung", "erfahrungen", "günstig", "online", "shop", 
+        "mit", "für", "von", "in", "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", 
+        "eines", "auf", "im", "am", "zu", "ist", "sind", "wie", "was", "wo", "wer", "warum", "als", "an",
+        "bei", "aus", "nach", "um", "bis", "über", "unter", "vor", "zwischen", "aber", "nur", "auch",
+        "dass", "dann", "wenn", "so", "sich", "nicht", "noch", "mehr", "durch", "zum", "zur"
+    ])
+    
+    dropped_keywords = pd.concat([top10_drops, page2_drops, total_loss]).drop_duplicates(subset=['Keyword']).copy()
+    
+    brand_terms = [b.strip().lower() for b in brand_input.split(',')] if brand_input.strip() else []
+    
+    def get_cluster(kw):
+        kw_lower = str(kw).lower()
+        for b in brand_terms:
+            if b and b in kw_lower:
+                return "Brand"
+        return None
+
+    # First pass: identify Brand
+    dropped_keywords['Cluster'] = dropped_keywords['Keyword'].apply(get_cluster)
+    
+    # Find Top N head terms for non-brand keywords
+    non_brand_kws = dropped_keywords[dropped_keywords['Cluster'].isnull()]['Keyword'].dropna().tolist()
+    
+    word_counts = Counter()
+    for kw in non_brand_kws:
+        words = re.findall(r'\b\w+\b', str(kw).lower())
+        for w in words:
+            if w not in stopwords and len(w) > 2 and not w.isnumeric():
+                word_counts[w] += 1
+                
+    top_head_terms = [word for word, count in word_counts.most_common(num_clusters)]
+    
+    # Second pass: assign non-brand to clusters
+    def assign_head_term(kw):
+        kw_lower = str(kw).lower()
+        for term in top_head_terms:
+            if re.search(rf'\b{re.escape(term)}\b', kw_lower):
+                return term.capitalize()
+        return "Sonstiges"
+        
+    dropped_keywords.loc[dropped_keywords['Cluster'].isnull(), 'Cluster'] = dropped_keywords[dropped_keywords['Cluster'].isnull()]['Keyword'].apply(assign_head_term)
+    
     # --- KPIs ---
     st.header("Überblick: Business Impact")
     
@@ -162,8 +213,9 @@ if uploaded_file is not None and st.session_state['analyzed']:
     # --- Visualizations & Tabs ---
     st.header("Visualisierungen")
     
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Verzeichnis-Analyse",
+        "Themen-Cluster",
         "Keyword-Veränderungen", 
         "Low Hanging Fruits", 
         "Gewinner"
@@ -188,6 +240,34 @@ if uploaded_file is not None and st.session_state['analyzed']:
             st.info("Keine Daten vorhanden.")
 
     with tab2:
+        st.subheader("Traffic-Verlust nach Themen-Clustern")
+        st.write("Automatische Bündelung der Verlierer-Keywords nach den häufigsten Begriffen (Head-Terms).")
+        
+        if not dropped_keywords.empty:
+            cluster_vol = dropped_keywords.groupby('Cluster').agg(
+                Traffic_Loss=('Traffic Loss', 'sum'),
+                Value_Loss=('Lost Value €', 'sum'),
+                Keyword_Count=('Keyword', 'count')
+            ).reset_index()
+            cluster_vol = cluster_vol[cluster_vol['Traffic_Loss'] > 0].sort_values('Traffic_Loss', ascending=False)
+            
+            fig_cluster = px.bar(cluster_vol, x='Cluster', y='Traffic_Loss', 
+                         title='Welche Themen-Cluster haben am meisten Traffic verloren?',
+                         labels={'Cluster': 'Themen-Cluster', 'Traffic_Loss': 'Verlorene Klicks (Schätzung)'},
+                         hover_data=['Value_Loss', 'Keyword_Count'],
+                         color='Traffic_Loss', color_continuous_scale='Blues')
+            st.plotly_chart(fig_cluster, use_container_width=True)
+            
+            st.markdown("#### Detail-Daten pro Cluster")
+            selected_cluster = st.selectbox("Wähle ein Cluster für Detail-Insights:", options=cluster_vol['Cluster'].tolist())
+            if selected_cluster:
+                cluster_df = dropped_keywords[dropped_keywords['Cluster'] == selected_cluster]
+                st.write(f"Gesamtes betroffenes Suchvolumen im Cluster '{selected_cluster}': **{int(cluster_df['Search Volume'].sum()):,}**".replace(',', '.'))
+                st.dataframe(cluster_df[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Directory', 'URL']].sort_values('Traffic Loss', ascending=False))
+        else:
+            st.info("Keine Abstürze zum Clustern vorhanden.")
+
+    with tab3:
         st.subheader("Alle Abstürze in der Übersicht")
         
         st.markdown("#### 1. Top 10 Drops (Aus Top 10 gerutscht)")
@@ -211,7 +291,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
         st.write(f"Gesamtes betroffenes Suchvolumen: **{int(total_loss['Search Volume'].sum()):,}** (Geschätzter Traffic-Verlust: {int(total_loss['Traffic Loss'].sum()):,})".replace(',', '.'))
         st.dataframe(total_loss[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Directory', 'URL']].sort_values('Search Volume', ascending=False))
 
-    with tab3:
+    with tab4:
         st.subheader("Low Hanging Fruits (Position 11 - 15)")
         st.write("Diese Keywords sind knapp auf Seite 2 abgerutscht. Mit kleinen Optimierungen holst du sie schnell zurück!")
         if not low_hanging.empty:
@@ -219,7 +299,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
         else:
             st.info("Keine Keywords im Bereich 11-15 gefunden.")
             
-    with tab4:
+    with tab5:
         st.subheader("Gewinner (Neu in den Top 10)")
         if not winners.empty:
             st.dataframe(winners[['Keyword', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Gain', 'Directory']].sort_values('Traffic Gain', ascending=False))
