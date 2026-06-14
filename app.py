@@ -9,8 +9,32 @@ from collections import Counter
 
 st.set_page_config(page_title="Sistrix Ranking Changes Analyzer", layout="wide")
 
-# --- i18n Translations ---
-lang_choice = st.sidebar.radio("Language / Sprache", ["🇩🇪 DE", "🇬🇧 EN"], index=0)
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from urllib.parse import urlparse
+import io
+import re
+from collections import Counter
+
+st.set_page_config(
+    page_title="Sistrix Ranking Changes Analyzer",
+    page_icon="assets/logo-head-clear.png",
+    layout="wide"
+)
+
+# --- Load Brand Styles ---
+try:
+    with open("brand_style.css", "r", encoding="utf-8") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+except Exception as e:
+    st.warning(f"Konnte brand_style.css nicht laden: {e}")
+
+# --- i18n Language Setup ---
+st.sidebar.image("assets/logo-horizontal.png", use_container_width=True)
+st.sidebar.markdown("### Language / Sprache")
+lang_choice = st.sidebar.radio("Select Language", options=["DE", "EN"], index=0, label_visibility="collapsed")
 lang = "DE" if "DE" in lang_choice else "EN"
 
 translations = {
@@ -41,7 +65,7 @@ translations = {
         "kpi_top3_drops": "Top 3 Drops",
         "kpi_top10_drops": "Top 10 Drops",
         "kpi_lhf": "Low Hanging Fruits",
-        "kpi_lhf_link": "👉 See tab below",
+        "kpi_lhf_link": "See tab below",
         "kpi_lhf_help": "Actual search volume of keywords ranking on positions 11-15. High search volume here means great potential if pushed to page 1.",
         "kpi_cluster_title": "Topic Cluster Performance",
         "kpi_best_cluster": "Best Cluster",
@@ -73,7 +97,7 @@ translations = {
         "cl_other": "Other",
         
         "rd_sub": "Ranking Drops Overview",
-        "rd_filter": "🔍 Filter by keyword (optional):",
+        "rd_filter": "Filter by keyword (optional):",
         "rd_t3_title": "#### 1. Top 3 Drops (Fell out of Top 3)",
         "rd_t3_empty": "No Top 3 Drops found.",
         "rd_t10_title": "#### 2. Top 10 Drops (Fell out of Top 10)",
@@ -100,7 +124,40 @@ translations = {
         "ad_filter_dir": "Filter by Directory",
         "ad_filter_kw": "Search Keyword",
         
-        "traffic": "Traffic"
+        "traffic": "Traffic",
+        "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Created in Munich & Bangkok with ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a>",
+        "legal_header": "Legal & Privacy Policy",
+        "imprint_body": """### Imprint
+
+**Information pursuant to § 5 DDG:**
+Benjamin Wingerter
+SEOux Indianer
+Email: mytools.sistrixrankingchanges@mindblowmedia.com
+Website: seouxindianer.de
+
+**Disclaimer:**
+The contents of this app were created with the utmost care. However, we cannot guarantee the correctness, completeness, or topicality of the content.""",
+        "privacy_body": """### Privacy Policy
+
+**1. General Information**
+This privacy policy informs you about the nature, scope, and purpose of the processing of personal data within this web application.
+
+**2. Data Controller**
+Benjamin Wingerter
+Email: mytools.sistrixrankingchanges@mindblowmedia.com
+
+**3. Hosting (Streamlit Cloud)**
+This app is hosted on Streamlit Community Cloud, a service provided by Snowflake Inc. (106 East Babcock Street, Suite 3A, Bozeman, MT 59715, USA). To serve the app securely, Snowflake processes connection logs and IP addresses of visitors. This processing is based on our legitimate interest in a secure and efficient operation of the application (Art. 6 (1) (f) GDPR). For more details, please refer to the Snowflake Privacy Policy.
+
+**4. Processing of Uploaded Files (CSV)**
+When you upload a Sistrix export file:
+- The file is processed **exclusively in the transient memory (RAM)** of the server to generate dashboards.
+- The uploaded data is **never stored permanently on any storage drive or database**.
+- As soon as you terminate your session (e.g., by closing the browser tab, reloading the page, or replacing the file), all processed data is completely erased.
+- The legal basis for this processing is Art. 6 (1) (f) GDPR (our legitimate interest in providing you with this analysis tool).
+
+**5. Your Rights**
+You have the right to access, rectify, erase, or restrict the processing of your personal data, as well as the right to data portability and objection.""",
     },
     "DE": {
         "title": "Sistrix Ranking Changes Analyzer",
@@ -129,7 +186,7 @@ translations = {
         "kpi_top3_drops": "Top 3 Abstürze",
         "kpi_top10_drops": "Top 10 Abstürze",
         "kpi_lhf": "Low Hanging Fruits",
-        "kpi_lhf_link": "👉 Siehe Reiter unten",
+        "kpi_lhf_link": "Siehe Reiter unten",
         "kpi_lhf_help": "Das komplette Suchvolumen, das diese Keywords im aktuellen Zeitraum auf den Positionen 11-15 sammeln. Ein hohes Suchvolumen hier bedeutet hohes Potenzial für Seite 1.",
         "kpi_cluster_title": "Themen-Cluster Performance",
         "kpi_best_cluster": "Bestes Cluster",
@@ -162,7 +219,7 @@ translations = {
         "cl_other": "Sonstiges",
         
         "rd_sub": "Alle Abstürze in der Übersicht",
-        "rd_filter": "🔍 Nach Keyword filtern (optional):",
+        "rd_filter": "Nach Keyword filtern (optional):",
         "rd_t3_title": "#### 1. Top 3 Drops (Aus Top 3 gerutscht)",
         "rd_t3_empty": "Keine Top 3 Drops gefunden.",
         "rd_t10_title": "#### 2. Top 10 Drops (Aus Top 10 gerutscht)",
@@ -188,10 +245,91 @@ translations = {
         "ad_filter_change": "Nach Change-Typ filtern",
         "ad_filter_dir": "Nach Verzeichnis filtern",
         "ad_filter_kw": "Keyword suchen",
+        "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Erstellt in München & Bangkok mit ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a>",
+        "legal_header": "Rechtliches / Impressum",
+        "imprint_body": """### Impressum
+
+**Angaben gemäß § 5 DDG:**
+Benjamin Wingerter
+SEOux Indianer
+E-Mail: mytools.sistrixrankingchanges@mindblowmedia.com
+Website: seouxindianer.de
+
+**Haftungsausschluss (Disclaimer):**
+Die Inhalte dieser App wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen.""",
+        "privacy_body": """### Datenschutzerklärung
+
+**1. Allgemeine Hinweise**
+Diese Datenschutzerklärung klärt Sie über die Art, den Umfang und Zweck der Verarbeitung von personenbezogenen Daten innerhalb dieser Webanwendung (App) auf.
+
+**2. Verantwortlicher**
+Benjamin Wingerter
+E-Mail: mytools.sistrixrankingchanges@mindblowmedia.com
+
+**3. Hosting (Streamlit Cloud)**
+Diese App wird auf der Streamlit Community Cloud gehostet, einem Dienst von Snowflake Inc. (106 East Babcock Street, Suite 3A, Bozeman, MT 59715, USA). Zur Bereitstellung und zum sicheren Betrieb der App verarbeitet Snowflake Verbindungsdaten und IP-Adressen der Besucher. Die Übermittlung erfolgt auf Grundlage unserer berechtigten Interessen an einem sicheren und effizienten Betrieb des Dienstes (Art. 6 Abs. 1 lit. f DSGVO). Weitere Details finden Sie in der Datenschutzerklärung von Snowflake.
+
+**4. Verarbeitung von hochgeladenen Dateien (CSV)**
+Wenn Sie eine Sistrix Exportdatei hochladen:
+- Die Datei wird **ausschließlich im Arbeitsspeicher (RAM)** des Servers verarbeitet, um die Auswertungen zu berechnen.
+- Die hochgeladenen Daten werden **zu keinem Zeitpunkt dauerhaft auf Datenträgern oder in einer Datenbank gespeichert**.
+- Sobald Sie Ihre Sitzung beenden (z. B. durch Schließen des Browsers, Neuladen der Seite oder Ändern der Upload-Datei), werden die verarbeiteten Daten vollständig gelöscht.
+- Die Rechtsgrundlage für diese Verarbeitung ist Art. 6 Abs. 1 lit. f DSGVO (unser berechtigtes Interesse, Ihnen diese Analysefunktionalität anzubieten).
+
+**5. Ihre Rechte**
+Sie haben das Recht auf Auskunft, Berichtigung, Löschung und Einschränkung der Verarbeitung Ihrer personenbezogenen Daten sowie das Recht auf Datenübertragbarkeit und Widerspruch.""",
     }
 }
 
 t = translations[lang]
+
+# Helper to format numbers based on selected language (DE: 1.234.567,89 / EN: 1,234,567.89)
+def format_num(val, decimal_places=0):
+    if pd.isnull(val):
+        return ""
+    formatted_str = f"{val:,.{decimal_places}f}"
+    if lang == "DE":
+        placeholder = "|||"
+        temp = formatted_str.replace(",", placeholder)
+        temp = temp.replace(".", ",")
+        formatted_str = temp.replace(placeholder, ".")
+    return formatted_str
+
+# Helper to style Plotly figures according to Corporate Design
+def style_plotly_fig(fig):
+    title_text = ""
+    if fig.layout.title is not None:
+        if isinstance(fig.layout.title, str):
+            title_text = fig.layout.title
+        elif hasattr(fig.layout.title, 'text') and fig.layout.title.text is not None:
+            title_text = fig.layout.title.text
+
+    fig.update_layout(
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font_family="Raleway",
+        font_color="#232323",
+        margin=dict(l=60, r=40, t=45, b=45),  # Safe default margins to avoid clipping
+        title=dict(
+            text=title_text,
+            font=dict(family="Raleway", color="#232323", size=15)
+        ),
+        xaxis=dict(
+            title=dict(text=""),  # Suppress default x-axis title to avoid "undefined" text
+            gridcolor="#dfdfdf",
+            zerolinecolor="#dfdfdf",
+            linecolor="#dfdfdf",
+            tickfont=dict(family="Open Sans", color="#535353")
+        ),
+        yaxis=dict(
+            title=dict(text=""),  # Suppress default y-axis title to avoid "undefined" text
+            gridcolor="#dfdfdf",
+            zerolinecolor="#dfdfdf",
+            linecolor="#dfdfdf",
+            tickfont=dict(family="Open Sans", color="#535353")
+        )
+    )
+    return fig
 
 st.title(t["title"])
 st.markdown(t["subtitle"])
@@ -215,6 +353,13 @@ if 'analyzed' not in st.session_state:
 if uploaded_file is not None:
     if st.sidebar.button(t["btn_analyze"], type="primary"):
         st.session_state['analyzed'] = True
+
+# Sidebar - Legal Disclosures
+st.sidebar.markdown("---")
+with st.sidebar.expander(t["legal_header"]):
+    st.markdown(t["imprint_body"])
+    st.markdown("---")
+    st.markdown(t["privacy_body"])
 
 # Helper function for CTR calculation
 def estimate_ctr(pos):
@@ -366,7 +511,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
         
     df.loc[df['Cluster'].isnull(), 'Cluster'] = df[df['Cluster'].isnull()]['Keyword'].apply(assign_head_term)
     
-    st.write("---")
+    st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
     
     # Segments
     losers = df[df['Traffic Loss'] > 0].copy()
@@ -386,26 +531,40 @@ if uploaded_file is not None and st.session_state['analyzed']:
     net_traffic = total_traffic_gained - total_traffic_loss
     lhf_search_vol = int(low_hanging['Search Volume'].sum())
     
-    col1, col2, col3 = st.columns(3)
+    # Calculate percentage change for the delta of Net Traffic Change
+    total_traffic_old = df['Traffic#1'].sum()
+    pct_change = (net_traffic / total_traffic_old * 100) if total_traffic_old > 0 else 0.0
+    pct_sign = " %" if lang == "DE" else "%"
+    if net_traffic > 0:
+        pct_change_formatted = f"+{format_num(pct_change, decimal_places=1)}{pct_sign}"
+    elif net_traffic < 0:
+        pct_change_formatted = f"{format_num(pct_change, decimal_places=1)}{pct_sign}"
+    else:
+        pct_change_formatted = f"{format_num(0.0, decimal_places=1)}{pct_sign}"
+        
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric(t["kpi_lost_total"], f"-{total_traffic_loss:,}".replace(',', '.'))
+        st.metric(t["kpi_lost_total"], f"-{format_num(total_traffic_loss)}")
     with col2:
-        st.metric(t["kpi_value_total"], f"-{total_value_loss:,.2f} €".replace(',', 'X').replace('.', ',').replace('X', '.'))
+        st.metric(t["kpi_net_change"], f"+{format_num(net_traffic)}" if net_traffic > 0 else format_num(net_traffic), delta=pct_change_formatted)
     with col3:
-        st.metric(t["kpi_gained_total"], f"+{total_traffic_gained:,}".replace(',', '.'))
+        st.metric(t["kpi_gained_total"], f"+{format_num(total_traffic_gained)}")
+    with col4:
+        val_str = f"-{format_num(total_value_loss, 2)} €" if lang == "DE" else f"-€{format_num(total_value_loss, 2)}"
+        st.metric(t["kpi_value_total"], val_str)
         
     st.write("")
     
-    col4, col5, col6 = st.columns(3)
-    with col4:
-        st.metric(t["kpi_top3_drops"], len(top3_drops), delta=f"-{int(top3_drops['Traffic Loss'].sum())} {t['traffic']}", delta_color="normal")
+    col5, col6, col7 = st.columns(3)
     with col5:
-        st.metric(t["kpi_top10_drops"], len(top10_drops), delta=f"-{int(top10_drops['Traffic Loss'].sum())} {t['traffic']}", delta_color="normal")
+        st.metric(t["kpi_top3_drops"], len(top3_drops), delta=f"-{format_num(int(top3_drops['Traffic Loss'].sum()))} {t['traffic']}", delta_color="normal")
     with col6:
-        st.metric(t["kpi_lhf"], len(low_hanging), delta=f"{lhf_search_vol:,} SV".replace(',', '.'), delta_color="off", help=t["kpi_lhf_help"])
+        st.metric(t["kpi_top10_drops"], len(top10_drops), delta=f"-{format_num(int(top10_drops['Traffic Loss'].sum()))} {t['traffic']}", delta_color="normal")
+    with col7:
+        st.metric(t["kpi_lhf"], len(low_hanging), delta=f"{format_num(lhf_search_vol)} SV", delta_color="off", help=t["kpi_lhf_help"])
         st.markdown(f"<div style='font-size: 14px; color: gray;'>{t.get('kpi_lhf_link', '')}</div>", unsafe_allow_html=True)
         
-    st.write("---")
+    st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
     
     viz_col1, viz_col2 = st.columns(2)
     with viz_col1:
@@ -419,18 +578,19 @@ if uploaded_file is not None and st.session_state['analyzed']:
             
             c1, c2 = st.columns(2)
             with c1:
-                st.metric(t["kpi_best_cluster"], best_cluster['Cluster'], f"{int(best_cluster['Traffic Change']):,} {t['traffic']}".replace(',', '.'))
+                st.metric(t["kpi_best_cluster"], best_cluster['Cluster'], f"+{format_num(int(best_cluster['Traffic Change']))} {t['traffic']}" if best_cluster['Traffic Change'] > 0 else f"{format_num(int(best_cluster['Traffic Change']))} {t['traffic']}")
             with c2:
-                st.metric(t["kpi_worst_cluster"], worst_cluster['Cluster'], f"{int(worst_cluster['Traffic Change']):,} {t['traffic']}".replace(',', '.'))
+                st.metric(t["kpi_worst_cluster"], worst_cluster['Cluster'], f"+{format_num(int(worst_cluster['Traffic Change']))} {t['traffic']}" if worst_cluster['Traffic Change'] > 0 else f"{format_num(int(worst_cluster['Traffic Change']))} {t['traffic']}")
                 
             top_bottom = pd.concat([cluster_net.nlargest(3, 'Traffic Change'), cluster_net.nsmallest(3, 'Traffic Change')]).drop_duplicates()
             top_bottom = top_bottom.sort_values('Traffic Change')
             fig_net = px.bar(
                 top_bottom, x='Traffic Change', y='Cluster', orientation='h',
-                color='Traffic Change', color_continuous_scale='RdYlGn',
+                color='Traffic Change', color_continuous_scale=[[0.0, '#d28063'], [0.5, '#ffed00'], [1.0, '#90c274']],
                 height=200
             )
-            fig_net.update_layout(margin=dict(l=0, r=0, t=0, b=0), yaxis_title=None, xaxis_title=None)
+            style_plotly_fig(fig_net)
+            fig_net.update_layout(margin=dict(l=10, r=10, t=25, b=10))
             st.plotly_chart(fig_net, use_container_width=True)
 
     with viz_col2:
@@ -439,14 +599,15 @@ if uploaded_file is not None and st.session_state['analyzed']:
             worst_top3 = top3_drops.nlargest(5, 'Traffic Loss').sort_values('Traffic Loss', ascending=True)
             fig_t3 = px.bar(
                 worst_top3, x='Traffic Loss', y='Keyword', orientation='h',
-                color_discrete_sequence=['#ff4b4b'], height=270
+                color_discrete_sequence=['#d28063'], height=270
             )
-            fig_t3.update_layout(margin=dict(l=0, r=0, t=10, b=0), yaxis_title=None, xaxis_title=None)
+            style_plotly_fig(fig_t3)
+            fig_t3.update_layout(margin=dict(l=10, r=10, t=25, b=10))
             st.plotly_chart(fig_t3, use_container_width=True)
         else:
             st.info(t["rd_t3_empty"])
             
-    st.write("---")
+    st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
 
     def display_styled_dataframe(df_to_show, sort_col, ascending=False):
         loss_cols = [c for c in ['Traffic Loss', 'Lost Value €'] if c in df_to_show.columns]
@@ -456,30 +617,36 @@ if uploaded_file is not None and st.session_state['analyzed']:
         format_dict = {}
         
         if loss_cols:
-            styler = styler.map(lambda x: 'color: #ff4b4b; font-weight: bold;' if pd.notnull(x) and x > 0 else '', subset=loss_cols)
+            styler = styler.map(lambda x: 'color: #d28063; font-weight: bold;' if pd.notnull(x) and x > 0 else '', subset=loss_cols)
             for c in loss_cols:
                 if c == 'Lost Value €':
-                    format_dict[c] = lambda x: f"▼ -{x:,.2f} €".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) and x > 0 else ("0,00 €" if pd.notnull(x) else "")
+                    if lang == "EN":
+                        format_dict[c] = lambda x: f"▼ -€{format_num(x, 2)}" if pd.notnull(x) and x > 0 else ("€0.00" if pd.notnull(x) else "")
+                    else:
+                        format_dict[c] = lambda x: f"▼ -{format_num(x, 2)} €" if pd.notnull(x) and x > 0 else ("0,00 €" if pd.notnull(x) else "")
                 else:
-                    format_dict[c] = lambda x: f"▼ -{x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) and x > 0 else ("0,00" if pd.notnull(x) else "")
+                    format_dict[c] = lambda x: f"▼ -{format_num(x)}" if pd.notnull(x) and x > 0 else ("0" if pd.notnull(x) else "")
                 
         if gain_cols:
-            styler = styler.map(lambda x: 'color: #09ab3b; font-weight: bold;' if pd.notnull(x) and x > 0 else '', subset=gain_cols)
+            styler = styler.map(lambda x: 'color: #90c274; font-weight: bold;' if pd.notnull(x) and x > 0 else '', subset=gain_cols)
             for c in gain_cols:
-                format_dict[c] = lambda x: f"▲ +{x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) and x > 0 else ("0,00" if pd.notnull(x) else "")
+                format_dict[c] = lambda x: f"▲ +{format_num(x)}" if pd.notnull(x) and x > 0 else ("0" if pd.notnull(x) else "")
                 
-        for c in ['Search Volume', 'Traffic#1', 'Traffic#2', 'Traffic Change']:
+        for c in ['Search Volume', 'Traffic#1', 'Traffic#2']:
             if c in df_to_show.columns:
-                format_dict[c] = lambda x: f"{x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') if pd.notnull(x) else ""
+                format_dict[c] = lambda x: format_num(x) if pd.notnull(x) else ""
                 
         for c in ['Position#1', 'Position#2']:
             if c in df_to_show.columns:
-                format_dict[c] = lambda x: "-" if pd.notnull(x) and x == 101 else (f"{x:.2f}".replace('.', ',') if pd.notnull(x) else "")
+                format_dict[c] = lambda x: "-" if pd.notnull(x) and x == 101 else (format_num(x, 2) if pd.notnull(x) else "")
         
-        for c in ['Position Change']:
-            if c in df_to_show.columns:
-                styler = styler.map(lambda x: 'color: #09ab3b;' if pd.notnull(x) and x > 0 else ('color: #ff4b4b;' if pd.notnull(x) and x < 0 else ''), subset=[c])
-                format_dict[c] = lambda x: f"▲ +{x:.2f}".replace('.', ',') if pd.notnull(x) and x > 0 else (f"▼ {x:.2f}".replace('.', ',') if pd.notnull(x) and x < 0 else "0,00")
+        if 'Position Change' in df_to_show.columns:
+            styler = styler.map(lambda x: 'color: #90c274; font-weight: bold;' if pd.notnull(x) and x > 0 else ('color: #d28063; font-weight: bold;' if pd.notnull(x) and x < 0 else ''), subset=['Position Change'])
+            format_dict['Position Change'] = lambda x: f"▲ +{format_num(abs(x), 2)}" if pd.notnull(x) and x > 0 else (f"▼ -{format_num(abs(x), 2)}" if pd.notnull(x) and x < 0 else "0,00")
+            
+        if 'Traffic Change' in df_to_show.columns:
+            styler = styler.map(lambda x: 'color: #90c274; font-weight: bold;' if pd.notnull(x) and x > 0 else ('color: #d28063; font-weight: bold;' if pd.notnull(x) and x < 0 else ''), subset=['Traffic Change'])
+            format_dict['Traffic Change'] = lambda x: f"▲ +{format_num(x)}" if pd.notnull(x) and x > 0 else (f"▼ -{format_num(abs(x))}" if pd.notnull(x) and x < 0 else "0")
                 
         styler = styler.format(format_dict)
         st.dataframe(styler, use_container_width=True)
@@ -508,7 +675,8 @@ if uploaded_file is not None and st.session_state['analyzed']:
                          title=t["dir_chart_title"],
                          labels={'Directory': t["dir_chart_label_d"], 'Traffic_Loss': t["dir_chart_label_t"]},
                          hover_data=['Value_Loss'],
-                         color='Traffic_Loss', color_continuous_scale='Reds')
+                         color='Traffic_Loss', color_continuous_scale=[[0.0, '#dfdfdf'], [1.0, '#d28063']])
+            style_plotly_fig(fig)
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info(t["dir_empty"])
@@ -529,7 +697,8 @@ if uploaded_file is not None and st.session_state['analyzed']:
                          title=t["cl_chart_title"],
                          labels={'Cluster': t["cl_chart_label_c"], 'Traffic_Loss': t["cl_chart_label_t"]},
                          hover_data=['Value_Loss', 'Keyword_Count'],
-                         color='Traffic_Loss', color_continuous_scale='Blues')
+                         color='Traffic_Loss', color_continuous_scale=[[0.0, '#dfdfdf'], [1.0, '#d28063']])
+            style_plotly_fig(fig_cluster)
             st.plotly_chart(fig_cluster, use_container_width=True)
             
             st.markdown(t["cl_detail"])
@@ -537,7 +706,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
             selected_clusters = st.multiselect(t["cl_select"], options=opts)
             if selected_clusters:
                 cluster_df = losers[losers['Cluster'].isin(selected_clusters)]
-                st.write(f"{t['cl_sum']} **{int(cluster_df['Search Volume'].sum()):,}**".replace(',', '.'))
+                st.write(f"{t['cl_sum']} **{format_num(int(cluster_df['Search Volume'].sum()))}**")
                 display_styled_dataframe(cluster_df[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
         else:
             st.info(t["cl_empty"])
@@ -553,28 +722,28 @@ if uploaded_file is not None and st.session_state['analyzed']:
         
         st.markdown(t["rd_t3_title"])
         if not f_top3.empty:
-            st.write(f"{t['rd_sum_vol']} **{int(f_top3['Search Volume'].sum()):,}** {t['rd_sum_traf']} {int(f_top3['Traffic Loss'].sum()):,})".replace(',', '.'))
+            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_top3['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_top3['Traffic Loss'].sum()))})")
             display_styled_dataframe(f_top3[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
         else:
             st.info(t["rd_t3_empty"])
             
         st.markdown(t["rd_t10_title"])
         if not f_top10.empty:
-            st.write(f"{t['rd_sum_vol']} **{int(f_top10['Search Volume'].sum()):,}** {t['rd_sum_traf']} {int(f_top10['Traffic Loss'].sum()):,})".replace(',', '.'))
+            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_top10['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_top10['Traffic Loss'].sum()))})")
             display_styled_dataframe(f_top10[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
         else:
             st.info(t["rd_t10_empty"])
             
         st.markdown(t["rd_p2_title"])
         if not f_page2.empty:
-            st.write(f"{t['rd_sum_vol']} **{int(f_page2['Search Volume'].sum()):,}** {t['rd_sum_traf']} {int(f_page2['Traffic Loss'].sum()):,})".replace(',', '.'))
+            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_page2['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_page2['Traffic Loss'].sum()))})")
             display_styled_dataframe(f_page2[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
         else:
             st.info(t["rd_p2_empty"])
             
         st.markdown(t["rd_100_title"])
         if not f_total.empty:
-            st.write(f"{t['rd_sum_vol']} **{int(f_total['Search Volume'].sum()):,}** {t['rd_sum_traf']} {int(f_total['Traffic Loss'].sum()):,})".replace(',', '.'))
+            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_total['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_total['Traffic Loss'].sum()))})")
             display_styled_dataframe(f_total[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
         else:
             st.info(t["rd_100_empty"])
@@ -596,9 +765,11 @@ if uploaded_file is not None and st.session_state['analyzed']:
                 winners, x="Search Volume", y="Position#2", 
                 size="Traffic Gain", color="Directory",
                 hover_name="Keyword", title=t["win_chart_title"],
-                labels={'Position#2': t["win_chart_label_pos"]}
+                labels={'Position#2': t["win_chart_label_pos"]},
+                color_discrete_sequence=['#2ea3f2', '#90c274', '#e2a312', '#993333', '#797979']
             )
             fig_win.update_yaxes(autorange="reversed")
+            style_plotly_fig(fig_win)
             st.plotly_chart(fig_win, use_container_width=True)
         else:
             st.info(t["win_empty"])
@@ -642,10 +813,8 @@ else:
     st.info(t.get("info_upload", "Bitte lade eine Sistrix CSV-Datei hoch und klicke auf 'Analysieren'."))
 
 # Footer
-st.markdown("<br><hr>", unsafe_allow_html=True)
+st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
 st.markdown(
-    "<div style='text-align: center; color: gray; font-size: 0.9em;'>"
-    "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Made with ❤️ in Munich & Bangkok: <a href='https://seouxindianer.de' target='_blank' style='color: gray; text-decoration: underline;'>seouxindianer.de</a>"
-    "</div>", 
+    f"<div style='text-align: center; color: #797979; font-size: 0.9em;'>{t['footer']}</div>", 
     unsafe_allow_html=True
 )
