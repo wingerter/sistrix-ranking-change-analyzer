@@ -66,6 +66,7 @@ hr.hr--black, .stMarkdown hr.hr--black { background-color: #232323 !important; }
     border-radius: 14px !important;
     box-shadow: 0 2px 8px rgba(35, 35, 35, 0.07) !important;
     padding: 1.25rem !important;
+    min-height: 140px !important;
 }
 
 [data-testid="stMetricLabel"] {

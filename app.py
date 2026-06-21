@@ -6,17 +6,9 @@ from urllib.parse import urlparse
 import io
 import re
 from collections import Counter
-
-st.set_page_config(page_title="Sistrix Ranking Changes Analyzer", layout="wide")
-
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from urllib.parse import urlparse
-import io
-import re
-from collections import Counter
+import base64
+import time
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="Sistrix Ranking Changes Analyzer",
@@ -64,6 +56,8 @@ translations = {
         "kpi_net_change": "Net Traffic Change",
         "kpi_top3_drops": "Top 3 Drops",
         "kpi_top10_drops": "Top 10 Drops",
+        "kpi_total_loss": "Complete Losses",
+        "kpi_total_loss_help": "Keywords that fell out of the Top 100 completely.",
         "kpi_lhf": "Low Hanging Fruits",
         "kpi_lhf_link": "See tab below",
         "kpi_lhf_help": "Actual search volume of keywords ranking on positions 11-15. High search volume here means great potential if pushed to page 1.",
@@ -98,11 +92,11 @@ translations = {
         
         "rd_sub": "Ranking Drops Overview",
         "rd_filter": "Filter by keyword (optional):",
-        "rd_t3_title": "#### 1. Top 3 Drops (Fell out of Top 3)",
+        "rd_t3_title": "#### 1. Top 3 Drops (Ranking losses starting in Top 3)",
         "rd_t3_empty": "No Top 3 Drops found.",
-        "rd_t10_title": "#### 2. Top 10 Drops (Fell out of Top 10)",
+        "rd_t10_title": "#### 2. Top 10 Drops (Ranking losses starting in Top 10)",
         "rd_t10_empty": "No Top 10 Drops found.",
-        "rd_p2_title": "#### 3. Page 2 Drops (Dropped from Page 2 further back)",
+        "rd_p2_title": "#### 3. Page 2 Drops (Ranking losses starting on Page 2)",
         "rd_p2_empty": "No Page 2 Drops found.",
         "rd_100_title": "#### 4. Complete Losses (Fell out of Top 100)",
         "rd_100_empty": "No keywords fell out of Top 100.",
@@ -123,9 +117,11 @@ translations = {
         "ad_filter_change": "Filter by Change Type",
         "ad_filter_dir": "Filter by Directory",
         "ad_filter_kw": "Search Keyword",
-        
+        "ad_filter_intent": "Filter by Search Intent",
+        "data_lang": "Data Language (for Search Intent)",
+        "kpi_intent_title": "Search Intent Distribution",
         "traffic": "Traffic",
-        "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Created in Munich & Bangkok with ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a>",
+        "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Created in Munich & Bangkok with ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a> | Co-developed with Antigravity",
         "legal_header": "Legal & Privacy Policy",
         "imprint_body": """### Imprint
 
@@ -185,6 +181,8 @@ You have the right to access, rectify, erase, or restrict the processing of your
         "kpi_net_change": "Netto Traffic-Veränderung",
         "kpi_top3_drops": "Top 3 Abstürze",
         "kpi_top10_drops": "Top 10 Abstürze",
+        "kpi_total_loss": "Komplette Verluste",
+        "kpi_total_loss_help": "Keywords, die komplett aus den Top 100 gefallen sind.",
         "kpi_lhf": "Low Hanging Fruits",
         "kpi_lhf_link": "Siehe Reiter unten",
         "kpi_lhf_help": "Das komplette Suchvolumen, das diese Keywords im aktuellen Zeitraum auf den Positionen 11-15 sammeln. Ein hohes Suchvolumen hier bedeutet hohes Potenzial für Seite 1.",
@@ -220,11 +218,11 @@ You have the right to access, rectify, erase, or restrict the processing of your
         
         "rd_sub": "Alle Abstürze in der Übersicht",
         "rd_filter": "Nach Keyword filtern (optional):",
-        "rd_t3_title": "#### 1. Top 3 Drops (Aus Top 3 gerutscht)",
+        "rd_t3_title": "#### 1. Top 3 Abstürze (Ranking-Verluste aus den Top 3)",
         "rd_t3_empty": "Keine Top 3 Drops gefunden.",
-        "rd_t10_title": "#### 2. Top 10 Drops (Aus Top 10 gerutscht)",
+        "rd_t10_title": "#### 2. Top 10 Abstürze (Ranking-Verluste aus den Top 10)",
         "rd_t10_empty": "Keine Top 10 Drops gefunden.",
-        "rd_p2_title": "#### 3. Seite 2 Drops (Von Seite 2 weiter nach hinten)",
+        "rd_p2_title": "#### 3. Seite 2 Abstürze (Ranking-Verluste von Seite 2)",
         "rd_p2_empty": "Keine Seite 2 Drops gefunden.",
         "rd_100_title": "#### 4. Komplette Verluste (Aus Top 100 gefallen)",
         "rd_100_empty": "Keine Keywords aus den Top 100 gefallen.",
@@ -245,7 +243,10 @@ You have the right to access, rectify, erase, or restrict the processing of your
         "ad_filter_change": "Nach Change-Typ filtern",
         "ad_filter_dir": "Nach Verzeichnis filtern",
         "ad_filter_kw": "Keyword suchen",
-        "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Erstellt in München & Bangkok mit ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a>",
+        "ad_filter_intent": "Nach Suchintent filtern",
+        "data_lang": "Daten-Sprache (für Suchintent)",
+        "kpi_intent_title": "Suchintents-Verteilung",
+        "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Erstellt in München & Bangkok mit ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a> | Mitentwickelt von Antigravity",
         "legal_header": "Rechtliches / Impressum",
         "imprint_body": """### Impressum
 
@@ -334,6 +335,101 @@ def style_plotly_fig(fig):
 st.title(t["title"])
 st.markdown(t["subtitle"])
 
+# --- Custom Loading Overlay ---
+loading_placeholder = st.empty()
+
+if st.session_state.get("show_custom_loader"):
+    logo_base64 = ""
+    try:
+        with open("assets/logo-head-clear.png", "rb") as image_file:
+            logo_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+    except Exception:
+        pass
+        
+    custom_loader_html = f"""<div class="custom-loader-overlay">
+    <div class="loader-logo-container">
+        <img class="loader-logo" src="data:image/png;base64,{logo_base64}" />
+        <svg class="loader-svg" viewBox="0 0 100 100">
+            <circle class="loader-bg-circle" cx="50" cy="50" r="45" />
+            <circle class="loader-fill-circle" cx="50" cy="50" r="45" />
+        </svg>
+    </div>
+</div>
+<style>
+.custom-loader-overlay {{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(35, 35, 35, 0.15);
+    backdrop-filter: blur(2px);
+    z-index: 999999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: all;
+}}
+.loader-logo-container {{
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}}
+.loader-logo {{
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    z-index: 1;
+}}
+.loader-svg {{
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 140px;
+    height: 140px;
+    z-index: 2;
+}}
+.loader-bg-circle {{
+    fill: none;
+    stroke: rgba(153, 51, 51, 0.05);
+    stroke-width: 6;
+}}
+.loader-fill-circle {{
+    fill: none;
+    stroke: rgba(153, 51, 51, 0.7);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 283;
+    animation: fill-progress 1.5s ease-in-out infinite alternate, rotate-spinner 2s linear infinite;
+    transform-origin: center;
+}}
+@keyframes fill-progress {{
+    0% {{
+        stroke-dashoffset: 283;
+    }}
+    100% {{
+        stroke-dashoffset: 28;
+    }}
+}}
+@keyframes rotate-spinner {{
+    0% {{
+        transform: rotate(0deg);
+    }}
+    100% {{
+        transform: rotate(360deg);
+    }}
+}}
+</style>"""
+    loading_placeholder.markdown(custom_loader_html, unsafe_allow_html=True)
+    time.sleep(1.2)
+
 # Sidebar - Settings
 st.sidebar.header(t["sidebar_data"])
 
@@ -346,6 +442,7 @@ date_new = st.sidebar.date_input(t["date_new"], value=pd.to_datetime('today'))
 st.sidebar.subheader(t["cluster_settings"])
 brand_input = st.sidebar.text_input(t["brand_input"], value="", help=t["brand_help"])
 num_clusters = st.sidebar.slider(t["cluster_count"], min_value=5, max_value=50, value=20, step=5)
+data_lang_choice = st.sidebar.selectbox(t["data_lang"], options=["Deutsch", "English"], index=0)
 
 if 'analyzed' not in st.session_state:
     st.session_state['analyzed'] = False
@@ -511,13 +608,54 @@ if uploaded_file is not None and st.session_state['analyzed']:
         
     df.loc[df['Cluster'].isnull(), 'Cluster'] = df[df['Cluster'].isnull()]['Keyword'].apply(assign_head_term)
     
+    def get_intent(kw):
+        kw_lower = str(kw).lower()
+        intents = []
+        if data_lang_choice == "Deutsch":
+            # User Intent: KNOW
+            if re.search(r'((.*\s|^)w(er|em|en|essen|ie|ann|o|elche|as|obei|omit|oran|orin|ohin|obei|eshalb|arum|ieso|orauf|orum|ovor|ogegen|odurch|oher|eswegen|oraus)\s.*)|((.*\s|^)anleitung|anweisung|beschreibung|bestimmung|bin ich|definition|erklärung|forum|frage|gesetz|guide|(.*\s|^)hilfe|how to|muss|kann(\s.*|$)|(.*\s|^)darf|methode|quora|rechtlich|regeln|tipps|tutorial|brauche|vor was|walkthrough|diy|yahoo clever|gute frage)(\s.*|$)', kw_lower):
+                intents.append("KNOW")
+                
+            # User Intent: DO (Transactional)
+            if re.search(r'.*aktionen.*|.*am billigsten.*|.*anfordern.*|.*angebot.*|.*anmeldung.*|.*auf lager.*|.*bestellbar.*|.*bestellen.*|.*billig.*|.*coupon.*|.*discount.*|.*download.*|.*free.*|.*garantie.*|.*gebraucht.*|.*gewinnen.*|.*gewinnspiel.*|.*gratis.*|.*günstig.*|.*günstige.*|.*günstiges.*|.*günstigste.*|.*günstigste.*|.*gutschein.*|.*gutscheincode.*|.*im angebot.*|.*in stock.*|.*kaufen.*|.*kaufen.*|.*käuflich.*|.*kontakt.*|.*kostenlos.*|.*leihen.*|.*mieten.*|.*mit kreditkarte.*|.*mit paypal.*|.*ohne schufa.*|.*online kaufen.*|.*onlineshop.*|.*pdf.*|.*preis.*|.*preisausschreiben.*|.*preisvergleich.*|.*preiswert.*|.*rabatt.*|.*shop.*|.*special.*|.*template.*|.*überbestände.*|.*umsonst.*|.*verkauf.*|.*vorlage.*|.*vorrätig.*|.*werbung.*|.*wo kauf.*|.*zu verkaufen.*', kw_lower):
+                intents.append("DO (Transactional)")
+
+            # User Intent: regional:CITY
+            if re.search(r'.*aach.*|.*aalen.*|.*abenberg.*|.*abensberg.*|.*achern.*|.*achim.*|.*adelsheim.*|.*adenau.*|.*adorf.*|.*ahaus.*|.*ahlen.*|.*ahrensburg.*|.*aichach.*|.*aichtal.*|.*aken.*|.*albstadt.*|.*alfeld.*|.*allendorf.*|.*allstedt.*|.*alpirsbach.*|.*alsdorf.*|.*alsfeld.*|.*alsleben.*|.*altdorf.*|.*altena.*|.*altenau.*|.*altenberg.*|.*altenburg.*|.*altenkirchen.*|.*altensteig.*|.*altentreptow.*|.*altlandsberg.*|.*altötting.*|.*alzenau.*|.*alzey.*|.*amberg.*|.*amöneburg.*|.*amorbach.*|.*andernach.*|.*angermünde.*|.*anklam.*|.*annaberg.*|.*annaberg-buchholz.*|.*annaburg.*|.*annweiler.*|.*ansbach.*|.*apolda.*|.*arendsee.*|.*arneburg.*|.*arnis.*|.*arnsberg.*|.*arnstadt.*|.*arnstein.*|.*artern.*|.*unstrut.*|.*arzberg.*|.*aschaffenburg.*|.*aschersleben.*|.*asperg.*|.*aßlar.*|.*attendorn.*|.*aub.*|.*aue.*|.*auerbach.*|.*augsburg.*|.*augustusburg.*|.*aulendorf.*|.*aurich.*|.*babenhausen.*|.*bacharach.*|.*backnang.*|.*bad aibling.*|.*bad arolsen.*|.*bad bentheim.*|.*bad bergzabern.*|.*bad berka.*|.*bad berleburg.*|.*bad berneck.*|.*bad bevensen.*|.*bad bibra.*|.*bad blankenburg.*|.*bad bramstedt.*|.*bad breisig.*|.*bad brückenau.*|.*bad buchau.*|.*bad camberg.*|.*bad colberg.*|.*bad colberg heldburg.*|.*colberg.*|.*heldburg.*|.*doberan.*|.*bad driburg.*|.*bad düben.*|.*bad dürkheim.*|.*bad dürrenberg.*|.*bad dürrheim.*|.*bad elster.*|.*bad ems.*|.*bad fallingbostel.*|.*bad frankenhausen.*|.*frankenhausen.*|.*kyffhäuser.*|.*bad freienwalde.*|.*bad friedrichshall.*|.*bad gandersheim.*|.*bad gottleuba.*|.*bad gottleuba-berggießhübel.*|.*bad griesbach.*|.*griesbach.*|.*bad grund.*|.*bad harzburg.*|.*bad herrenalb.*|.*bad hersfeld.*|.*bad homburg.*|.*bad homburg vor der höhe.*|.*bad honnef.*|.*bad hönningen.*|.*bad iburg.*|.*bad karlshafen.*|.*kissingen.*|.*bad könig.*|.*königshofen.*|.*bad kösen.*|.*köstritz.*|.*kötzting.*|.*bad kreuznach.*|.*bad krozingen.*|.*bad laasphe.*|.*bad langensalza.*|.*bad lauchstädt.*|.*bad lausick.*|.*bad lauterberg.*|.*bad lauterberg im harz.*|.*bad liebenstein.*|.*bad liebenwerda.*|.*bad liebenzell.*|.*bad lippspringe.*|.*bad lobenstein.*|.*bad marienberg.*|.*bad mergentheim.*|.*bad münder am deister.*|.*bad münster.*|.*bad münster am stein-ebernburg.*|.*bad münstereifel.*|.*bad muskau.*|.*bad nauheim.*|.*bad nenndorf.*|.*bad neuenahr.*|.*bad neuenahr-ahrweiler.*|.*bad neustadt.*|.*bad neustadt an der saale.*|.*bad oeynhausen.*|.*bad oldesloe.*|.*bad orb.*|.*bad pyrmont.*|.*bad rappenau.*|.*bad reichenhall.*|.*bad rodach.*|.*bad sachsa.*|.*bad säckingen.*|.*bad salzdetfurth.*|.*bad salzuflen.*|.*bad salzungen.*|.*bad saulgau.*|.*bad schandau.*|.*bad schmiedeberg.*|.*bad schussenried.*|.*bad schwalbach.*|.*bad schwartau.*|.*bad segeberg.*|.*bad sobernheim.*|.*bad soden.*|.*bad soden am taunus.*|.*bad soden-salmünster.*|.*bad sooden.*|.*bad sooden-allendorf.*|.*staffelstein.*|.*bad sulza.*|.*bad sülze.*|.*teinach.*|.*zavelstein.*|.*tennstedt.*|.*tölz.*|.*bad urach.*|.*vilbel.*|.*bad waldsee.*|.*bad wildbad.*|.*bad wildungen.*|.*bad wilsnack.*|.*bad wimpfen.*|.*bad windsheim.*|.*bad wörishofen.*|.*bad wünnenberg.*|.*bad wurzach.*|.*baden-baden.*|.*baesweiler.*|.*baiersdorf.*|.*balingen.*|.*ballenstedt.*|.*balve.*|.*bamberg.*|.*barby.*|.*bargteheide.*|.*barmstedt.*|.*bärnau.*|.*barntrup.*|.*barsinghausen.*|.*barth.*|.*baruth.*|.*baruth.*|.*bassum.*|.*battenberg.*|.*baumholder.*|.*baunach.*|.*baunatal.*|.*bautzen.*|.*bayreuth.*|.*bebra.*|.*beckum.*|.*bedburg.*|.*beelitz.*|.*beerfelden.*|.*beeskow.*|.*beilngries.*|.*beilstein.*|.*belgern.*|.*belzig.*|.*bendorf.*|.*benneckenstein.*|.*bensheim.*|.*berching.*|.*berga elster.*|.*bergen.*|.*bergheim.*|.*bergisch gladbach.*|.*bergkamen.*|.*bergneustadt.*|.*berka.*|.*berka werra.*|.*werra.*|.*berlin.*|.*bernau bei berlin.*|.*bernburg.*|.*bernkastel-kues.*|.*bernsdorf.*|.*bernstadt a. d. eigen.*|.*bersenbrück.*|.*besigheim.*|.*betzdorf.*|.*betzenstein.*|.*beverungen.*|.*bexbach.*|.*biberach an der riß.*|.*biedenkopf.*|.*bielefeld.*|.*biesenthal.*|.*bietigheim-bissingen.*|.*billerbeck.*|.*bingen am rhein.*|.*birkenfeld.*|.*bischofsheim an der rhön.*|.*bischofswerda.*|.*bismark.*|.*bitburg.*|.*bitterfeld.*|.*blankenburg.*|.*blankenhain.*|.*blaubeuren.*|.*bleckede.*|.*bleicherode.*|.*blieskastel.*|.*blomberg.*|.*blumberg.*|.*bobingen.*|.*böblingen.*|.*bocholt.*|.*bochum.*|.*bockenem.*|.*bodenwerder.*|.*bogen.*|.*böhlen.*|.*boizenburg.*|.*bonn.*|.*bonndorf im schwarzwald.*|.*bönnigheim.*|.*bopfingen.*|.*boppard.*|.*borgentreich.*|.*borgholzhausen.*|.*borken.*|.*borken.*|.*borkum.*|.*borna.*|.*bornheim.*|.*bottrop.*|.*boxberg.*|.*brackenheim.*|.*brake.*|.*brakel.*|.*bramsche.*|.*brand-erbisdorf.*|.*brandenburg an der havel.*|.*brandis.*|.*braubach.*|.*braunfels.*|.*braunlage.*|.*bräunlingen.*|.*braunsbedra.*|.*braunschweig.*|.*breckerfeld.*|.*bredstedt.*|.*brehna.*|.*breisach am rhein.*|.*bremen.*|.*bremerhaven.*|.*bremervörde.*|.*bretten.*|.*breuberg.*|.*brilon.*|.*brotterode.*|.*bruchköbel.*|.*bruchsal.*|.*brück.*|.*brüel.*|.*brühl.*|.*brunsbüttel.*|.*brüssow.*|.*buchen.*|.*buchholz.*|.*buchholz in der nordheide.*|.*buchloe.*|.*bückeburg.*|.*buckow.*|.*büdelsdorf.*|.*büdingen.*|.*bühl.*|.*bünde.*|.*büren.*|.*burg.*|.*burg stargard.*|.*burgau.*|.*burgbernheim.*|.*burgdorf.*|.*bürgel.*|.*burghausen.*|.*burgkunstadt.*|.*burglengenfeld.*|.*burgstädt.*|.*burgwedel.*|.*burladingen.*|.*burscheid.*|.*bürstadt.*|.*buttelstedt.*|.*buttstädt.*|.*butzbach.*|.*bützow.*|.*buxtehude.*|.*calau.*|.*calbe.*|.*calw.*|.*camburg.*|.*castrop-rauxel.*|.*celle.*|.*cham.*|.*chemnitz.*|.*clausthal-zellerfeld.*|.*clingen.*|.*cloppenburg.*|.*coburg.*|.*cochem.*|.*coesfeld.*|.*colditz.*|.*coswig.*|.*coswig.*|.*cottbus.*|.*crailsheim.*|.*creglingen.*|.*creußen.*|.*creuzburg.*|.*crimmitschau.*|.*crivitz.*|.*cuxhaven.*|.*dachau.*|.*dahlen.*|.*dahme.*|.*dahn.*|.*damme.*|.*dannenberg.*|.*dargun.*|.*darmstadt.*|.*dassel.*|.*dassow.*|.*datteln.*|.*daun.*|.*deggendorf.*|.*deidesheim.*|.*delbrück.*|.*delitzsch.*|.*delmenhorst.*|.*demmin.*|.*derenburg.*|.*dessau.*|.*detmold.*|.*dettelbach.*|.*dieburg.*|.*diemelstadt.*|.*diepholz.*|.*dierdorf.*|.*dietenheim.*|.*dietfurt an der altmühl.*|.*dietzenbach.*|.*diez.*|.*dillenburg.*|.*donau.*|.*dillingen.*|.*dingelstädt.*|.*dingolfing.*|.*dinkelsbühl.*|.*dinklage.*|.*dinslaken.*|.*dippoldiswalde.*|.*dissen am teutoburger wald.*|.*ditzingen.*|.*döbeln.*|.*doberlug-kirchhain.*|.*döbern.*|.*dohna.*|.*dömitz.*|.*dommitzsch.*|.*donaueschingen.*|.*donauwörth.*|.*donzdorf.*|.*dorfen.*|.*dormagen.*|.*dornburg.*|.*dornhan.*|.*dornstetten.*|.*dorsten.*|.*dortmund.*|.*dransfeld.*|.*drebkau.*|.*dreieich.*|.*drensteinfurt.*|.*dresden.*|.*drolshagen.*|.*duderstadt.*|.*duisburg.*|.*dülmen.*|.*düren.*|.*düsseldorf.*|.*ebeleben.*|.*eberbach.*|.*ebermannstadt.*|.*ebern.*|.*ebersbach.*|.*ebersbach an der fils.*|.*ebersberg.*|.*eberswalde.*|.*eckartsberga.*|.*eckernförde.*|.*edenkoben.*|.*egeln.*|.*eggenfelden.*|.*eggesin.*|.*ehingen.*|.*ehrenfriedersdorf.*|.*eibelstadt.*|.*eibenstock.*|.*eichstätt.*|.*eilenburg.*|.*einbeck.*|.*eisenach.*|.*eisenberg.*|.*eisenberg.*|.*eisenhüttenstadt.*|.*eisfeld.*|.*eisleben.*|.*eislingen.*|.*elbingerode.*|.*ellingen.*|.*ellrich.*|.*ellwangen.*|.*elmshorn.*|.*elsfleth.*|.*elsterberg.*|.*elsterwerda.*|.*elstra.*|.*elterlein.*|.*eltmann.*|.*eltville am rhein.*|.*elzach.*|.*elze.*|.*emden.*|.*emmendingen.*|.*emmerich am rhein.*|.*emsdetten.*|.*endingen am kaiserstuhl.*|.*engen.*|.*enger.*|.*ennepetal.*|.*ennigerloh.*|.*eppelheim.*|.*eppingen.*|.*eppstein.*|.*erbach.*|.*erbach.*|.*erbendorf.*|.*erding.*|.*erftstadt.*|.*erfurt.*|.*erkelenz.*|.*erkner.*|.*erkrath.*|.*erlangen.*|.*erlenbach am main.*|.*erwitte.*|.*eschborn.*|.*eschenbach in der oberpfalz.*|.*eschershausen.*|.*eschwege.*|.*eschweiler.*|.*espelkamp.*|.*essen.*|.*esslingen.*|.*ettenheim.*|.*ettlingen.*|.*euskirchen.*|.*eutin.*|.*falkenberg.*|.*falkensee.*|.*falkenstein.*|.*fehmarn.*|.*fellbach.*|.*felsberg.*|.*feuchtwangen.*|.*filderstadt.*|.*finsterwalde.*|.*fladungen.*|.*flensburg.*|.*flöha.*|.*flörsheim.*|.*forchheim.*|.*forchtenberg.*|.*frankenau.*|.*frankenberg.*|.*frankenberg.*|.*frankenthal.*|.*frankfurt.*|.*frankfurt am main.*|.*franzburg.*|.*franzburg.*|.*frechen.*|.*freiberg.*|.*freiberg am neckar.*|.*freiburg im breisgau.*|.*freilassing.*|.*freinsheim.*|.*freising.*|.*freital.*|.*freren.*|.*freudenberg.*|.*freudenberg.*|.*freudenstadt.*|.*freyburg.*|.*freystadt.*|.*freyung.*|.*fridingen an der donau.*|.*friedberg.*|.*friedberg.*|.*friedland.*|.*friedland.*|.*friedrichroda.*|.*friedrichsdorf.*|.*friedrichshafen.*|.*friedrichstadt.*|.*friedrichsthal.*|.*friesack.*|.*friesoythe.*|.*fritzlar.*|.*frohburg.*|.*fröndenberg.*|.*fulda.*|.*fürstenau.*|.*fürstenberg.*|.*fürstenfeldbruck.*|.*fürstenwalde.*|.*fürth.*|.*furth im wald.*|.*furtwangen im schwarzwald.*|.*füssen.*|.*gadebusch.*|.*gaggenau.*|.*gaildorf.*|.*gammertingen.*|.*garbsen.*|.*garching bei münchen.*|.*gardelegen.*|.*garding.*|.*gartz.*|.*garz.*|.*algesheim.*|.*gebesee.*|.*gedern.*|.*geesthacht.*|.*gefell.*|.*gefrees.*|.*gehrden.*|.*geilenkirchen.*|.*geisa.*|.*geiselhöring.*|.*geisenfeld.*|.*geisenheim.*|.*geising.*|.*geisingen.*|.*geislingen.*|.*geislingen an der steige.*|.*geithain.*|.*geldern.*|.*gelnhausen.*|.*gelsenkirchen.*|.*gemünden.*|.*gemünden am main.*|.*gengenbach.*|.*genthin.*|.*georgsmarienhütte.*|.*gera.*|.*gerabronn.*|.*gerbstedt.*|.*geretsried.*|.*geringswalde.*|.*gerlingen.*|.*germering.*|.*germersheim.*|.*gernrode.*|.*gernsbach.*|.*gernsheim.*|.*gerolstein.*|.*gerolzhofen.*|.*gersfeld.*|.*gersthofen.*|.*gescher.*|.*geseke.*|.*gevelsberg.*|.*geyer.*|.*giengen.*|.*gießen.*|.*gifhorn.*|.*gladbeck.*|.*gladenbach.*|.*glashütte.*|.*glauchau.*|.*glinde.*|.*glücksburg.*|.*glückstadt.*|.*gnoien.*|.*goch.*|.*goldberg.*|.*goldkronach.*|.*golßen.*|.*gommern.*|.*göppingen.*|.*görlitz.*|.*goslar.*|.*gößnitz.*|.*gotha.*|.*göttingen.*|.*grabow.*|.*grafenau.*|.*gräfenberg.*|.*gräfenhainichen.*|.*gräfenthal.*|.*grafenwöhr.*|.*grafing.*|.*gransee.*|.*grebenau.*|.*grebenstein.*|.*greding.*|.*greifswald.*|.*greiz.*|.*greußen.*|.*greven.*|.*grevenbroich.*|.*grevesmühlen.*|.*griesheim.*|.*grimma.*|.*grimmen.*|.*gröbzig.*|.*gröditz.*|.*groitzsch.*|.*gronau.*|.*gronau.*|.*gröningen.*|.*groß bieberau.*|.*groß gerau.*|.*groß-umstadt.*|.*großalmerode.*|.*großbottwar.*|.*großbreitenbach.*|.*großenehrich.*|.*großenhain.*|.*großräschen.*|.*großröhrsdorf.*|.*großschirma.*|.*grünberg.*|.*grünhain-beierfeld.*|.*grünsfeld.*|.*grünstadt.*|.*guben.*|.*gudensberg.*|.*güglingen.*|.*gummersbach.*|.*gundelfingen an der donau.*|.*gundelsheim.*|.*güntersberge.*|.*günzburg.*|.*gunzenhausen.*|.*güsten.*|.*güstrow.*|.*gütersloh.*|.*gützkow.*|.*haan.*|.*hachenburg.*|.*hadamar.*|.*hadmersleben.*|.*hagen.*|.*hagenbach.*|.*hagenow.*|.*haiger.*|.*haigerloch.*|.*hainichen.*|.*haiterbach.*|.*halberstadt.*|.*haldensleben.*|.*halle.*|.*halle.*|.*hallenberg.*|.*hallstadt.*|.*haltern am see.*|.*halver.*|.*hamburg.*|.*hameln.*|.*hamm.*|.*hammelburg.*|.*hamminkeln.*|.*hanau.*|.*hann. münden.*|.*hannover.*|.*harburg.*|.*hardegsen.*|.*haren.*|.*harsewinkel.*|.*hartenstein.*|.*hartha.*|.*harzgerode.*|.*haselünne.*|.*haslach im kinzigtal.*|.*hasselfelde.*|.*haßfurt.*|.*hattersheim am main.*|.*hattingen.*|.*hatzfeld.*|.*hausach.*|.*hauzenberg.*|.*havelberg.*|.*havelsee.*|.*hayingen.*|.*hechingen.*|.*hecklingen.*|.*heideck.*|.*heidelberg.*|.*heidenau.*|.*heidenheim an der brenz.*|.*heilbad heiligenstadt.*|.*heilbronn.*|.*heiligenhafen.*|.*heiligenhaus.*|.*heilsbronn.*|.*heimbach.*|.*heimsheim.*|.*heinsberg.*|.*heitersheim.*|.*heldrungen.*|.*helmbrechts.*|.*helmstedt.*|.*hemau.*|.*hemer.*|.*hemmingen.*|.*hemmoor.*|.*hemsbach.*|.*hennef.*|.*hennigsdorf.*|.*heppenheim.*|.*herbolzheim.*|.*herborn.*|.*herbrechtingen.*|.*herbstein.*|.*herdecke.*|.*herdorf.*|.*herford.*|.*heringen.*|.*heringen.*|.*hermeskeil.*|.*hermsdorf.*|.*herne.*|.*herrenberg.*|.*herrieden.*|.*herrnhut.*|.*hersbruck.*|.*herten.*|.*herzberg.*|.*herzberg am harz.*|.*herzogenaurach.*|.*herzogenrath.*|.*hessisch lichtenau.*|.*hessisch oldendorf.*|.*hettingen.*|.*hettstedt.*|.*heubach.*|.*heusenstamm.*|.*hilchenbach.*|.*hildburghausen.*|.*hilden.*|.*hildesheim.*|.*hillesheim.*|.*hilpoltstein.*|.*hirschau.*|.*hirschberg.*|.*hirschhorn.*|.*hitzacker.*|.*hochheim am main.*|.*höchstadt an der aisch.*|.*höchstädt an der donau.*|.*hockenheim.*|.*hofgeismar.*|.*hofheim.*|.*hohen neuendorf.*|.*hohenberg.*|.*hohenleuben.*|.*hohenmölsen.*|.*hohenstein-ernstthal.*|.*hohnstein.*|.*höhr-grenzhausen.*|.*hollfeld.*|.*holzgerlingen.*|.*holzminden.*|.*homberg.*|.*homberg.*|.*homburg.*|.*horb am neckar.*|.*meinberg.*|.*hornbach.*|.*hornberg.*|.*hornburg.*|.*hörstel.*|.*horstmar.*|.*höxter.*|.*hoya.*|.*hoyerswerda.*|.*hoym.*|.*hückelhoven.*|.*hückeswagen.*|.*hüfingen.*|.*hünfeld.*|.*hungen.*|.*hürth.*|.*husum.*|.*ibbenbüren.*|.*ichenhausen.*|.*idar-oberstein.*|.*idstein.*|.*illertissen.*|.*ilmenau.*|.*ilsenburg.*|.*ilshofen.*|.*immenhausen.*|.*immenstadt im allgäu.*|.*ingelfingen.*|.*ingelheim am rhein.*|.*ingolstadt.*|.*iphofen.*|.*iserlohn.*|.*isny im allgäu.*|.*isselburg.*|.*itzehoe.*|.*jarmen.*|.*jena.*|.*jerichow.*|.*jessen.*|.*jeßnitz.*|.*jever.*|.*joachimsthal.*|.*johanngeorgenstadt.*|.*jöhstadt.*|.*jülich.*|.*jüterbog.*|.*kaarst.*|.*kahla.*|.*kaisersesch.*|.*kaiserslautern.*|.*kalbe.*|.*kalkar.*|.*kaltenkirchen.*|.*kaltennordheim.*|.*kamen.*|.*kamenz.*|.*kamp-lintfort.*|.*kandel.*|.*kandern.*|.*kappeln.*|.*karben.*|.*karlsruhe.*|.*karlstadt.*|.*kassel.*|.*kastellaun.*|.*katzenelnbogen.*|.*kaub.*|.*kaufbeuren.*|.*kehl.*|.*kelbra.*|.*kelheim.*|.*kelkheim.*|.*kellinghusen.*|.*kelsterbach.*|.*kemberg.*|.*kemnath.*|.*kempen.*|.*kempten.*|.*kenzingen.*|.*kerpen.*|.*ketzin.*|.*kevelaer.*|.*kiel.*|.*kierspe.*|.*kindelbrück.*|.*kirchberg.*|.*kirchberg.*|.*kirchberg an der jagst.*|.*kirchen.*|.*kirchenlamitz.*|.*kirchhain.*|.*kirchheim unter teck.*|.*kirchheimbolanden.*|.*kirn.*|.*kirtorf.*|.*kitzingen.*|.*kitzscher.*|.*kleve.*|.*klingenberg.*|.*klingenthal.*|.*klötze.*|.*klütz.*|.*knittlingen.*|.*koblenz.*|.*kohren-sahlis.*|.*kolbermoor.*|.*kölleda.*|.*köln.*|.*königs wusterhausen.*|.*königsberg in bayern.*|.*königsbrück.*|.*königsbrunn.*|.*königsee.*|.*königslutter.*|.*königstein.*|.*königstein im taunus.*|.*königswinter.*|.*könnern.*|.*konstanz.*|.*konz.*|.*korbach.*|.*korntal-münchingen.*|.*kornwestheim.*|.*korschenbroich.*|.*köthen.*|.*kraichtal.*|.*krakow am see.*|.*kranichfeld.*|.*krautheim.*|.*krefeld.*|.*kremmen.*|.*krempe.*|.*kreuztal.*|.*kronach.*|.*kronberg im taunus.*|.*kröpelin.*|.*kroppenstedt.*|.*krumbach.*|.*kühlungsborn.*|.*kulmbach.*|.*külsheim.*|.*künzelsau.*|.*kupferberg.*|.*kuppenheim.*|.*kusel.*|.*kyllburg.*|.*kyritz.*|.*laage.*|.*laatzen.*|.*ladenburg.*|.*lahnstein.*|.*lahr.*|.*schwarzwald.*|.*laichingen.*|.*lambrecht.*|.*lampertheim.*|.*landau an der isar.*|.*landau in der pfalz.*|.*landsberg.*|.*landsberg am lech.*|.*landshut.*|.*landstuhl.*|.*langelsheim.*|^langen.*|.*langenau.*|.*langenburg.*|.*langenfeld.*|.*langenhagen.*|.*langenselbold.*|.*langenzenn.*|.*langewiesen.*|.*lassan.*|.*laubach.*|.*laucha an der unstrut.*|.*lauchhammer.*|.*lauchheim.*|.*lauda-königshofen.*|.*lauenburg.*|.*lauf an der pegnitz.*|.*laufen.*|.*laufenburg.*|.*lauffen am neckar.*|.*lauingen.*|.*laupheim.*|.*lauscha.*|.*lauta.*|.*lauter.*|.*lebach.*|.*lebus.*|.*leer.*|.*lehesten.*|.*lehrte.*|.*leichlingen.*|.*leimen.*|.*leinefelde-worbis.*|.*leinfelden-echterdingen.*|.*leipheim.*|.*leipzig.*|.*leisnig.*|.*lemgo.*|.*lengefeld.*|.*lengenfeld.*|.*lengerich.*|.*stadt.*|.*lenzen.*|.*leonberg.*|.*leun.*|.*leuna.*|.*leutenberg.*|.*leutershausen.*|.*leutkirch im allgäu.*|.*leverkusen.*|.*lichtenau.*|.*lichtenberg.*|.*lichtenfels.*|.*lichtenstein.*|.*liebenau.*|.*liebenwalde.*|.*lieberose.*|.*limbach-oberfrohna.*|.*limburg an der lahn.*|.*lindau.*|.*lindau.*|.*linden.*|.*lindenberg.*|.*lindenfels.*|.*lindow.*|.*linnich.*|.*linz am rhein.*|.*löbau.*|.*löbejün.*|.*loburg.*|.*löffingen.*|.*lohmar.*|.*lohne.*|.*löhne.*|.*lohr am main.*|.*loitz.*|.*lollar.*|.*lommatzsch.*|.*löningen.*|.*lorch.*|.*lorch.*|.*lörrach.*|.*lorsch.*|.*lößnitz.*|.*löwenstein.*|.*lübbecke.*|.*lübben.*|.*lübbenau.*|.*spreewald.*|.*lübeck.*|.*lübtheen.*|.*lübz.*|.*lüchow.*|.*lucka.*|.*luckau.*|.*luckenwalde.*|.*lüdenscheid.*|.*lüdinghausen.*|.*ludwigsburg.*|.*ludwigsfelde.*|.*ludwigshafen am rhein.*|.*ludwigslust.*|.*lugau.*|.*lügde.*|.*lüneburg.*|.*lünen.*|.*lunzenau.*|.*lütjenburg.*|.*lützen.*|.*lychen.*|.*magdala.*|.*magdeburg.*|.*mahlberg.*|.*mainbernheim.*|.*mainburg.*|.*maintal.*|.*mainz.*|.*malchin.*|.*malchow.*|.*manderscheid.*|.*mannheim.*|.*mansfeld.*|.*marbach am neckar.*|.*marburg.*|.*marienberg.*|.*marienmünster.*|.*markdorf.*|.*markgröningen.*|.*märkisch buchholz.*|.*markkleeberg.*|.*markneukirchen.*|.*markranstädt.*|.*marktbreit.*|.*marktheidenfeld.*|.*marktleuthen.*|.*marktoberdorf.*|.*marktredwitz.*|.*marktsteft.*|.*marlow.*|.*marne$|^marne.*|.*marsberg.*|.*maulbronn.*|.*maxhütte-haidhof.*|.*mayen.*|.*mechernich.*|.*meckenheim.*|.*medebach.*|.*meerane.*|.*meerbusch.*|.*meersburg.*|.*meinerzhagen.*|.*meiningen.*|.*meisenheim.*|.*meißen.*|.*meldorf.*|.*melle.*|.*melsungen.*|.*memmingen.*|.*menden.*|.*mendig.*|.*mengen.*|.*meppen.*|.*merkendorf.*|.*merseburg.*|.*merzig.*|.*meschede.*|.*meßkirch.*|.*meßstetten.*|.*mettmann.*|.*metzingen.*|.*meuselwitz.*|.*meyenburg.*|.*miesbach.*|.*miltenberg.*|.*mindelheim.*|.*minden.*|.*mirow.*|.*mittenwalde.*|.*mitterteich.*|.*mittweida.*|.*möckern.*|.*möckmühl.*|.*moers.*|.*mölln.*|.*mönchengladbach.*|.*monheim.*|.*monheim am rhein.*|.*monschau.*|.*montabaur.*|.*moosburg an der isar.*|.*mörfelden-walldorf.*|.*moringen.*|.*mosbach.*|.*mössingen.*|.*mücheln.*|.*mügeln.*|.*mühlacker.*|.*mühlberg.*|.*mühldorf.*|.*mühlhausen.*|.*mühlheim.*|.*mühltroff.*|.*mülheim.*|.*müllheim.*|.*müllrose.*|.*münchberg.*|.*müncheberg.*|.*münchen.*|.*münchenbernsdorf.*|.*munderkingen.*|.*münsingen.*|.*munster.*|.*münster.*|.*münstermaifeld.*|.*münzenberg.*|.*murrhardt.*|.*mutzschen.*|.*mylau.*|.*nabburg.*|.*nagold.*|.*naila.*|.*nassau.*|.*nastätten.*|.*nauen.*|.*naumburg.*|.*naumburg.*|.*naunhof.*|.*nebra.*|.*neckarbischofsheim.*|.*neckargemünd.*|.*neckarsteinach.*|.*neckarsulm.*|.*nerchau.*|.*neresheim.*|.*netphen.*|.*nettetal.*|.*netzschkau.*|.*neu-isenburg.*|.*neu ulm.*|.*neubrandenburg.*|.*neubukow.*|.*neubulach.*|.*neuburg.*|.*neudenau.*|.*neuenbürg.*|.*neuenburg am rhein.*|.*neuenhaus.*|.*neuenrade.*|.*neuenstein.*|.*neuerburg.*|.*neuffen.*|.*neugersdorf.*|.*neuhaus am rennweg.*|.*neukalen.*|.*neukirchen.*|.*neukirchen-vluyn.*|.*neukloster.*|.*neumark.*|.*neumünster.*|.*neunburg.*|.*neunkirchen.*|.*neuötting.*|.*neuruppin.*|.*neusalza-spremberg.*|.*neusäß.*|.*neuss.*|.*neustrelitz.*|.*neutraubling.*|.*neuwied.*|.*nidda.*|.*niddatal.*|.*nidderau.*|.*nideggen.*|.*niebüll.*|.*niedenstein.*|.*niederkassel.*|.*niedernhall.*|.*niederstetten.*|.*niederstotzingen.*|.*nieheim.*|.*niemegk.*|.*nienburg.*|.*nienburg.*|.*niesky.*|.*nittenau.*|.*norden.*|.*nordenham.*|.*norderney.*|.*norderstedt.*|.*nordhausen.*|.*nordhorn.*|.*nördlingen.*|.*northeim.*|.*nortorf.*|.*nossen.*|.*nürnberg.*|.*nürtingen.*|.*ober-ramstadt.*|.*oberasbach.*|.*oberhausen.*|.*oberhof.*|.*oberkirch.*|.*oberkochen.*|.*oberlungwitz.*|.*obermoschel.*|.*obernburg am main.*|.*oberndorf am neckar.*|.*obernkirchen.*|.*oberriexingen.*|.*obertshausen.*|.*oberursel.*|.*oberviechtach.*|.*oberweißbach.*|.*oberwesel.*|.*oberwiesenthal.*|.*ochsenfurt.*|.*ochsenhausen.*|.*ochtrup.*|.*oderberg.*|.*oebisfelde.*|.*oederan.*|.*oelde.*|.*oelsnitz.*|.*erzgebirge.*|.*erkenschwick.*|.*oerlinghausen.*|.*oestrich-winkel.*|.*oettingen in bayern.*|.*offenbach am main.*|.*offenburg.*|.*ohrdruf.*|.*öhringen.*|.*olbernhau.*|.*oldenburg.*|.*oldenburg in holstein.*|.*olfen.*|.*olpe.*|.*olsberg.*|.*oppenau.*|.*oppenheim.*|.*oranienbaum.*|.*oranienburg.*|.*orlamünde.*|.*ornbau.*|.*ortenberg.*|.*ortrand.*|.*oschatz.*|.*oschersleben.*|.*osnabrück.*|.*osterburg.*|.*osterburken.*|.*osterfeld.*|.*osterhofen.*|.*osterholz-scharmbeck.*|.*osterode am harz.*|.*osterwieck.*|.*ostfildern.*|.*ostheim vor der rhön.*|.*osthofen.*|.*östringen.*|.*ostritz.*|.*otterberg.*|.*otterndorf.*|.*ottweiler.*|.*overath.*|.*owen.*|.*paderborn.*|.*papenburg.*|.*pappenheim.*|.*parchim.*|.*parsberg.*|.*pasewalk.*|.*passau.*|.*pattensen.*|.*pausa.*|.*vogtland.*|.*pegau.*|.*pegnitz.*|.*peine.*|.*peitz.*|.*penig.*|.*penkun.*|.*penzberg.*|.*penzlin.*|.*perleberg.*|.*petershagen.*|.*pfaffenhofen an der ilm.*|.*pfarrkirchen.*|.*pforzheim.*|.*pfreimd.*|.*pfullendorf.*|.*pfullingen.*|.*philippsburg.*|.*pinneberg.*|.*pirmasens.*|.*pirna.*|.*plattling.*|.*plau am see.*|.*plaue.*|.*plauen.*|.*plettenberg.*|.*pleystein.*|.*plochingen.*|.*plön.*|.*pocking.*|.*pohlheim.*|.*polch.*|.*porta westfalica.*|.*pößneck.*|.*potsdam.*|.*pottenstein.*|.*preetz.*|.*premnitz.*|.*prenzlau.*|.*pressath.*|.*prettin.*|.*pretzsch.*|.*preußisch oldendorf.*|.*pritzwalk.*|.*prüm.*|.*pulheim.*|.*pulsnitz.*|.*putbus.*|.*putlitz.*|.*püttlingen.*|.*quakenbrück.*|.*quedlinburg.*|.*querfurt.*|.*quickborn.*|.*rabenau.*|.*radeberg.*|.*radebeul.*|.*radeburg.*|.*radegast.*|.*radevormwald.*|.*radolfzell am bodensee.*|.*raguhn.*|.*rahden.*|.*rain.*|.*ramstein-miesenbach.*|.*ranis.*|.*ransbach.*|.*baumbach.*|.*rastatt.*|.*rastenberg.*|.*rathenow.*|.*ratingen.*|.*ratzeburg.*|.*rauenberg.*|.*raunheim.*|.*rauschenberg.*|.*ravensburg.*|.*ravenstein.*|.*recklinghausen.*|.*rees.*|.*regen.*|.*regensburg.*|.*regis breitingen.*|.*rehau.*|.*rehburg-loccum.*|.*rehna.*|.*reichelsheim.*|.*reichenbach.*|.*reinbek.*|.*reinfeld.*|.*reinheim.*|.*remagen.*|.*remda-teichel.*|.*remscheid.*|.*remseck am neckar.*|.*renchen.*|.*rendsburg.*|.*rennerod.*|.*renningen.*|.*rerik.*|.*rethem.*|.*reutlingen.*|.*rheda-wiedenbrück.*|.*rhede.*|.*rheinau.*|.*rheinbach.*|.*rheinberg.*|.*rheine.*|.*rheinfelden.*|.*rheinsberg.*|.*rheinstetten.*|.*rhens.*|.*rhinow.*|.*ribnitz-damgarten.*|.*richtenberg.*|.*riedenburg.*|.*riedlingen.*|.*rieneck.*|.*riesa.*|.*rietberg.*|.*rinteln.*|.*röbel.*|.*müritz.*|.*rochlitz.*|.*rockenhausen.*|.*rodalben.*|.*rodenberg.*|.*rödental.*|.*rödermark.*|.*rodewisch.*|.*rodgau.*|.*roding.*|.*römhild.*|.*romrod.*|.*ronneburg.*|.*ronnenberg.*|.*rosbach.*|.*rosenfeld.*|.*rosenheim.*|.*rosenthal.*|.*rösrath.*|.*roßlau.*|.*roßleben.*|.*roßwein.*|.*rostock.*|.*rotenburg.*|.*rotenburg an der flux.*|.*roth.*|.*rötha.*|.*röthenbach.*|.*rothenburg.*|.*rothenfels.*|.*rottenburg.*|.*rottenburg am neckar.*|.*röttingen.*|.*rottweil.*|.*rötz.*|.*rüdesheim.*|.*ruhla.*|.*ruhland.*|.*runkel.*|.*rüsselsheim.*|.*rüthen.*|.*saalburg.*|.*saalburg ebersdorf.*|.*saalfeld.*|.*saale.*|.*saarbrücken.*|.*saarburg.*|.*saarlouis.*|.*sachsenhagen.*|.*sachsenheim.*|.*salzgitter.*|.*salzkotten.*|.*salzwedel.*|.*sandau.*|.*sandersleben.*|.*sangerhausen.*|.*sankt andreasberg.*|.*sankt augustin.*|.*sankt goar.*|.*sankt goarshausen.*|.*sarstedt.*|.*sassenberg.*|.*sassnitz.*|.*sayda.*|.*schafstädt.*|.*schalkau.*|.*schauenstein.*|.*scheer.*|.*scheibenberg.*|.*scheinfeld.*|.*schelklingen.*|.*schenefeld.*|.*scheßlitz.*|.*schieder-schwalenberg.*|.*schildau.*|.*schillingsfürst.*|.*schiltach.*|.*schirgiswalde.*|.*schkeuditz.*|.*schkölen.*|.*schleiden.*|.*schleiz.*|.*schleswig.*|.*schlettau.*|.*schleusingen.*|.*schlieben.*|.*schlitz.*|.*schloß holte-stukenbrock.*|.*schlotheim.*|.*schlüchtern.*|.*schlüsselfeld.*|.*schmalkalden.*|.*schmallenberg.*|.*schmölln.*|.*schnackenburg.*|.*schnaittenbach.*|.*schneeberg.*|.*schneverdingen.*|.*schömberg.*|.*schönau.*|.*schönau im schwarzwald.*|.*schönberg.*|.*schönebeck.*|.*schöneck.*|.*schönewalde.*|.*schongau.*|.*schöningen.*|.*schönsee.*|.*schönwald.*|.*schopfheim.*|.*schöppenstedt.*|.*schorndorf.*|.*schortens.*|.*schotten.*|.*schramberg.*|.*schraplau.*|.*schriesheim.*|.*schrobenhausen.*|.*schrozberg.*|.*schüttorf.*|.*schwaan.*|.*schwabach.*|.*schwäbisch gmünd.*|.*schwäbisch hall.*|.*schwabmünchen.*|.*schwaigern.*|.*schwalbach am taunus.*|.*schwandorf.*|.*schwanebeck.*|.*schwarzenbach.*|.*schwarzenbek.*|.*schwarzenberg.*|.*schwarzenborn.*|.*schwarzheide.*|.*schwedt.*|.*schweich.*|.*schweinfurt.*|.*schwelm.*|.*schwerin.*|.*schwerte.*|.*schwetzingen.*|.*sebnitz.*|.*seehausen.*|.*seehausen.*|.*seelow.*|.*seelze.*|.*seesen.*|.*sehnde.*|.*seifhennersdorf.*|.*selb.*|.*selbitz.*|.*selm.*|.*selters.*|.*senden.*|.*sendenhorst.*|.*senftenberg.*|.*seßlach.*|.*siegburg.*|.*siegen.*|.*sigmaringen.*|.*simbach am inn.*|.*simmern.*|.*hunsrück.*|.*sindelfingen.*|.*singen.*|.*sinsheim.*|.*sinzig.*|.*soest.*|.*solingen.*|.*solms.*|.*soltau.*|.*sömmerda.*|.*sondershausen.*|.*sonneberg.*|.*sonnewalde.*|.*sonthofen.*|.*sontra.*|.*spaichingen.*|.*spalt.*|.*spangenberg.*|.*spenge.*|.*speyer.*|.*spremberg.*|.*sprockhövel.*|.*st. blasien.*|.*st. georgen.*|.*st. ingbert.*|.*st. wendel.*|.*stade.*|.*starnberg.*|.*staßfurt.*|.*staufen im breisgau.*|.*staufenberg.*|.*stavenhagen.*|.*steinach.*|.*steinau.*|.*steinbach.*|.*steinfurt.*|.*steinheim.*|.*stendal.*|.*sternberg.*|.*stockach.*|.*stolberg.*|.*stollberg.*|.*stolpen.*|.*storkow.*|.*stößen.*|.*straelen.*|.*stralsund.*|.*strasburg.*|.*straubing.*|.*strausberg.*|.*strehla.*|.*stromberg.*|.*stühlingen.*|.*stutensee.*|.*stuttgart.*|.*suhl.*|.*sulingen.*|.*sulz am neckar.*|.*sulzbach-rosenberg.*|.*sulzbach.*|.*sulzburg.*|.*sundern (sauerland).*|.*süßen.*|.*syke.*|.*tambach.*|.*dietharz.*|.*tangerhütte.*|.*tangermünde.*|.*tann.*|.*tanna.*|.*tauberbischofsheim.*|.*taucha.*|.*taunusstein.*|.*tecklenburg.*|.*tegernsee.*|.*telgte.*|.*teltow.*|.*templin.*|.*tengen.*|.*tessin.*|.*teterow.*|.*tettnang.*|.*teublitz.*|.*teuchern.*|.*teupitz.*|.*teuschnitz.*|.*thale.*|.*thalheim.*|.*thannhausen.*|.*tharandt.*|.*themar.*|.*thum.*|.*tirschenreuth.*|.*titisee.*|.*tittmoning.*|.*todtnau.*|.*töging.*|.*tönisvorst.*|.*tönning.*|.*torgau.*|.*torgelow.*|.*tornesch.*|.*traben-trarbach.*|.*traunreut.*|.*traunstein.*|.*trebbin.*|.*trebsen.*|.*treffurt.*|.*trendelburg.*|.*treuchtlingen.*|.*treuen.*|.*treuenbrietzen.*|.*triberg im schwarzwald.*|.*tribsees.*|.*trier.*|.*triptis.*|.*trochtelfingen.*|.*troisdorf.*|.*trossingen.*|.*trostberg.*|.*tübingen.*|.*tuttlingen.*|.*twistringen.*|.*übach-palenberg.*|.*überlingen.*|.*uebigau-wahrenbrück.*|.*ueckermünde.*|.*uelzen.*|.*uetersen.*|.*uffenheim.*|.*uhingen.*|.*ulm.*|.*ulrichstein.*|.*unna.*|.*unstrut.*|.*unterföhring.*|.*unterschleißheim.*|.*usedom.*|.*usingen.*|.*uslar.*|.*vacha.*|.*vaihingen an der enz.*|.*vallendar.*|.*varel.*|.*vechta.*|.*velbert.*|.*velburg.*|.*velden.*|.*vellberg.*|.*vellmar.*|.*velten.*|.*verden.*|.*versmold.*|.*vetschau.*|.*viechtach.*|.*vienenburg.*|.*viernheim.*|.*viersen.*|.*villingen-schwenningen.*|.*vilsbiburg.*|.*vilseck.*|.*vilshofen an der donau.*|.*visselhövede.*|.*vlotho.*|.*voerde.*|.*vogtsburg.*|.*kaiserstuhl.*|.*vohburg.*|.*vohenstrauß.*|.*vöhrenbach.*|.*vöhringen.*|.*volkach.*|.*völklingen.*|.*volkmarsen.*|.*vreden.*|.*wachenheim an der weinstraße.*|.*wächtersbach.*|^wadern.*|.* wadern.*|.*waghäusel.*|.*wahlstedt.*|.*waiblingen.*|.*waischenfeld.*|.*waldbröl.*|.*waldeck.*|.*waldenbuch.*|.*waldenburg.*|.*waldenburg.*|.*waldershof.*|.*waldheim.*|.*waldkappel.*|.*waldkirch.*|.*waldkirchen.*|.*waldkraiburg.*|.*waldmünchen.*|.*waldsassen.*|.*waldshut-tiengen.*|.*walldorf.*|.*walldürn.*|.*wallenfels.*|.*walsrode.*|.*waltershausen.*|.*waltrop.*|.*wanfried.*|.*wangen im allgäu.*|.*wanzleben.*|.*warburg.*|.*waren.*|.*warendorf.*|.*warin.*|.*warstein.*|.*wassenberg.*|.*wasserburg am inn.*|.*wassertrüdingen.*|.*wasungen.*|.*wedel.*|.*weener.*|.*wegberg.*|.*wegeleben.*|.*weida.*|.*weiden in der oberpfalz.*|.*weikersheim.*|.*weil am rhein.*|.*weilburg.*|.*weilheim.*|.*weimar.*|.*weinheim.*|.*weinsberg.*|.*weismain.*|.*weißenberg.*|.*weißenburg.*|.*weißenfels.*|.*weißenhorn.*|.*weißensee.*|.*weißenthurm.*|.*weißwasser.*|.*weiterstadt.*|.*welzheim.*|.*welzow.*|.*wemding.*|.*wendlingen.*|.*werben.*|.*werdau.*|.*werder.*|.*werdohl.*|.*werl.*|.*wermelskirchen.*|.*wernau.*|.*werne.*|.*werneuchen.*|.*wernigerode.*|.*werra.*|.*wertheim.*|.*werther.*|.*wertingen.*|.*wesel.*|.*wesenberg.*|.*wesselburen.*|.*wesseling.*|.*westerburg.*|.*westerland.*|.*westerstede.*|.*wetter.*|.*wetter.*|.*wettin.*|.*wetzlar.*|.*widdern.*|.*wiehe.*|.*wiehl.*|.*wiesbaden.*|.*wiesensteig.*|.*wiesloch.*|.*wiesmoor.*|.*wildberg.*|.*wildemann.*|.*wildenfels.*|.*wildeshausen.*|.*wilhelmshaven.*|.*wilkau-haßlau.*|.*willebadessen.*|.*willich.*|.*wilsdruff.*|.*wilster.*|.*wilthen.*|.*windischeschenbach.*|.*windsbach.*|.*winnenden.*|.*winsen.*|.*winterberg.*|.*wipperfürth.*|.*wirges.*|.*wismar.*|.*wissen.*|.*witten.*|.*wittenberg.*|.*wittenberge.*|.*wittenburg.*|.*wittichenau.*|.*wittingen.*|.*wittlich.*|.*wittmund.*|.*wittstock.*|.*dosse.*|.*witzenhausen.*|.*woldegk.*|.*wolfach.*|.*wolfen.*|.*wolfenbüttel.*|.*wolfhagen.*|.*wolframs-eschenbach.*|.*wolfratshausen.*|.*wolfsburg.*|.*wolfstein.*|.*wolgast.*|.*wolkenstein.*|.*wolmirstedt.*|.*wörlitz.*|.*worms.*|.*wörth.*|.*wriezen.*|.*wülfrath.*|.*wunsiedel.*|.*wunstorf.*|.*wuppertal.*|.*würselen.*|.*wurzbach.*|.*würzburg.*|.*wurzen.*|.*wustrow.*|.*wyk auf föhr.*|.*xanten.*|.*zahna.*|.*zarrentin am schaalsee.*|.*zehdenick.*|.*zeil am main.*|.*zeitz.*|.*zell am.*|.*zell im.*|.*mehlis.*|.*zerbst.*|.*zeulenroda.*|.*zeven.*|.*ziegenrück.*|.*zierenberg.*|.*ziesar.*|.*zirndorf.*|.*zittau.*|.*zöblitz.*|.*zörbig.*|.*zossen.*|.*zschopau.*|.*zülpich.*|.*zweibrücken.*|.*zwenkau.*|.*zwickau.*|.*zwiesel.*|.*zwingenberg.*|.*zwönitz.*', kw_lower):
+                intents.append("regional:CITY")
+
+            # User Intent: regional:COUNTRY
+            if re.search(r'.*belgien.*|.*bulgarien.*|.*dänemark.*|.*deutschland.*|.*estland.*|.*finnland.*|.*frankreich.*|.*griechenland.*|.*irland.*|.*italien.*|.*kroatien.*|.*lettland.*|.*litauen.*|.*luxemburg.*|.*malta.*|.*niederlande.*|.*österreich.*|.*polen.*|.*portugal.*|.*rumänien.*', kw_lower):
+                intents.append("regional:COUNTRY")
+                
+        elif data_lang_choice == "English":
+            # User Intent: KNOW
+            if re.search(r'\b(who|what|where|when|why|how|which|whose|whom|guide|tutorial|tips|definition|explain|explanation|how\s+to|faq|forum|info|information|meaning|instruction|manual|example|examples|case\s+study|learn|training|course|help|support|diy|walkthrough)\b', kw_lower):
+                intents.append("KNOW")
+                
+            # User Intent: DO (Transactional)
+            if re.search(r'\b(buy|order|cheap|coupon|discount|download|free|shop|price|pricing|sale|purchase|store|promo|deal|deals|rent|hire|cheapest|voucher|booking|book)\b', kw_lower):
+                intents.append("DO (Transactional)")
+
+            # User Intent: regional:CITY
+            if re.search(r'\b(near\s+me|local|nearby|map|directions|address|hours|opening\s+hours|london|new\s+york|nyc|los\s+angeles|chicago|houston|phoenix|philadelphia|dallas|san\s+diego|austin|san\s+francisco|seattle|denver|boston|miami|atlanta|las\s+vegas|toronto|vancouver|sydney|melbourne|brisbane|perth|auckland)\b', kw_lower):
+                intents.append("regional:CITY")
+
+            # User Intent: regional:COUNTRY
+            if re.search(r'\b(us|usa|united\s+states|uk|united\s+kingdom|england|great\s+britain|canada|australia|nz|new\s+zealand|ireland|scotland|wales|south\s+africa)\b', kw_lower):
+                intents.append("regional:COUNTRY")
+                
+        return ", ".join(intents) if intents else "undefined"
+
+    df['Search Intent'] = df['Keyword'].apply(get_intent)
+    
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
     
     # Segments
     losers = df[df['Traffic Loss'] > 0].copy()
-    top3_drops = df[(df['Position#1'] <= 3) & (df['Position#2'] > 3) & (df['Traffic Loss'] > 0)]
-    top10_drops = df[(df['Position#1'] <= 10) & (df['Position#2'] > 10) & (df['Traffic Loss'] > 0)]
-    page2_drops = df[(df['Position#1'] > 10) & (df['Position#1'] <= 20) & (df['Position#2'] > 20) & (df['Traffic Loss'] > 0)]
+    top3_drops = df[(df['Position#1'] <= 3) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
+    top10_drops = df[(df['Position#1'] <= 10) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
+    page2_drops = df[(df['Position#1'] > 10) & (df['Position#1'] <= 20) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
     total_loss = df[(df['Position#1'] <= 100) & (df['Position#2'] > 100) & (df['Traffic Loss'] > 0)]
     low_hanging = df[(df['Position#2'] >= 11) & (df['Position#2'] <= 15)]
     winners = df[df['Traffic Gain'] > 0].copy()
@@ -542,27 +680,151 @@ if uploaded_file is not None and st.session_state['analyzed']:
     else:
         pct_change_formatted = f"{format_num(0.0, decimal_places=1)}{pct_sign}"
         
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric(t["kpi_lost_total"], f"-{format_num(total_traffic_loss)}")
-    with col2:
-        st.metric(t["kpi_net_change"], f"+{format_num(net_traffic)}" if net_traffic > 0 else format_num(net_traffic), delta=pct_change_formatted)
-    with col3:
-        st.metric(t["kpi_gained_total"], f"+{format_num(total_traffic_gained)}")
-    with col4:
-        val_str = f"-{format_num(total_value_loss, 2)} €" if lang == "DE" else f"-€{format_num(total_value_loss, 2)}"
-        st.metric(t["kpi_value_total"], val_str)
-        
-    st.write("")
+    # Prepare data points for insertion
+    loss_val_str = f"-{format_num(total_traffic_loss)}"
+    gain_val_str = f"+{format_num(total_traffic_gained)}"
+    net_val_str = f"+{format_num(net_traffic)}" if net_traffic > 0 else format_num(net_traffic)
+    pct_val_str = pct_change_formatted
+    value_val_str = f"-{format_num(total_value_loss, 2)} €" if lang == "DE" else f"-€{format_num(total_value_loss, 2)}"
     
-    col5, col6, col7 = st.columns(3)
-    with col5:
-        st.metric(t["kpi_top3_drops"], len(top3_drops), delta=f"-{format_num(int(top3_drops['Traffic Loss'].sum()))} {t['traffic']}", delta_color="normal")
-    with col6:
-        st.metric(t["kpi_top10_drops"], len(top10_drops), delta=f"-{format_num(int(top10_drops['Traffic Loss'].sum()))} {t['traffic']}", delta_color="normal")
-    with col7:
-        st.metric(t["kpi_lhf"], len(low_hanging), delta=f"{format_num(lhf_search_vol)} SV", delta_color="off", help=t["kpi_lhf_help"])
-        st.markdown(f"<div style='font-size: 14px; color: gray;'>{t.get('kpi_lhf_link', '')}</div>", unsafe_allow_html=True)
+    top3_count = len(top3_drops)
+    top3_loss_str = f"-{format_num(int(top3_drops['Traffic Loss'].sum()))} {t['traffic']}"
+    top3_loss_only = format_num(int(top3_drops['Traffic Loss'].sum()))
+    
+    top10_count = len(top10_drops)
+    top10_loss_str = f"-{format_num(int(top10_drops['Traffic Loss'].sum()))} {t['traffic']}"
+    top10_loss_only = format_num(int(top10_drops['Traffic Loss'].sum()))
+    
+    total_loss_count = len(total_loss)
+    total_loss_loss_str = f"-{format_num(int(total_loss['Traffic Loss'].sum()))} {t['traffic']}"
+    total_loss_loss_only = format_num(int(total_loss['Traffic Loss'].sum()))
+    
+    lhf_count = len(low_hanging)
+    lhf_sv = format_num(lhf_search_vol)
+
+    if lang == "DE":
+        story_text = f"""<p style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.6; font-size: 0.95rem; margin-bottom: 1rem;'>
+Ich habe die Sistrix-Vergleichsdaten für Sie analysiert. Im betrachteten Zeitraum verzeichnete Ihre Website eine 
+<strong style='color: #232323;'>Netto-Traffic-Veränderung von <span style='color: {"#90c274" if net_traffic > 0 else "#d28063"}; font-weight: bold;'>{net_val_str} Klicks</span> ({pct_val_str})</strong>. 
+Dieser Netto-Effekt resultiert aus einem <strong>Zuwachs von <span style='color: #90c274; font-weight: bold;'>{gain_val_str} Klicks</span></strong> durch Gewinner-Keywords und einem <strong>Verlust von <span style='color: #d28063; font-weight: bold;'>{loss_val_str} Klicks</span></strong> bei den Verlierer-Keywords. 
+Der geschätzte monetäre Verlust (AdWords-Äquivalent) beläuft sich auf <strong style='color: #d28063;'>{value_val_str}</strong>.
+</p>
+
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Haupttreiber des Traffic-Verlusts:</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Abstürze aus den Top 3:</strong> Ich konnte <span style='font-weight: bold;'>{top3_count} Keywords</span> identifizieren, die aus den absoluten Spitzenpositionen (1-3) herausgefallen sind, was einen Verlust von <span style='color: #d28063; font-weight: bold;'>{top3_loss_only} Klicks</span> zur Folge hatte. Diese Keywords erfordern Ihre sofortige Aufmerksamkeit.
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Abstürze aus den Top 10:</strong> Weitere <span style='font-weight: bold;'>{top10_count} Keywords</span> haben die erste Seite (Top 10) verlassen. Dies hat den Traffic um <span style='color: #d28063; font-weight: bold;'>{top10_loss_only} Klicks</span> reduziert.
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Vollständige Ranking-Verluste:</strong> Insgesamt sind <span style='font-weight: bold;'>{total_loss_count} Keywords</span> komplett aus den Top 100 herausgefallen (Verlust: <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only} Klicks</span>).
+</li>
+</ul>
+
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Quick-Wins / Handlungsempfehlungen:</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li>
+Ich empfehle Ihnen die On-Page-Optimierung für die <strong style='color: #90c274;'>{lhf_count} Schwellen-Keywords (Low Hanging Fruits)</strong> auf den Positionen 11-15. Diese Keywords weisen bereits ein beträchtliches <strong>Suchvolumen von {lhf_sv} SV</strong> auf der zweiten Ergebnisseite auf. Mit gezielten inhaltlichen Anpassungen können Sie diese schnell auf Seite 1 heben.
+</li>
+</ul>"""
+        story_title = "Executive Summary & Marketing-Story"
+    else:
+        story_text = f"""<p style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.6; font-size: 0.95rem; margin-bottom: 1rem;'>
+I have analyzed the Sistrix comparison data for you. During the analyzed timeframe, your website recorded a 
+<strong style='color: #232323;'>Net Traffic Change of <span style='color: {"#90c274" if net_traffic > 0 else "#d28063"}; font-weight: bold;'>{net_val_str} clicks</span> ({pct_val_str})</strong>. 
+This net effect is composed of a <strong>gain of <span style='color: #90c274; font-weight: bold;'>{gain_val_str} clicks</span></strong> (winning keywords) 
+and a <strong>loss of <span style='color: #d28063; font-weight: bold;'>{loss_val_str} clicks</span></strong> (losing keywords). 
+The estimated monetary loss (AdWords equivalent) amounts to <strong style='color: #d28063;'>{value_val_str}</strong>.
+</p>
+
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Main Drivers of Traffic Loss:</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Drops from Top 3:</strong> I identified <span style='font-weight: bold;'>{top3_count} keywords</span> that fell out of the top positions (1-3), causing a loss of <span style='color: #d28063; font-weight: bold;'>{top3_loss_only} clicks</span>. These keywords require your urgent optimization.
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Drops from Top 10:</strong> An additional <span style='font-weight: bold;'>{top10_count} keywords</span> slipped off the first results page (Top 10), reducing traffic by <span style='color: #d28063; font-weight: bold;'>{top10_loss_only} clicks</span>.
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Complete Ranking Losses:</strong> In total, <span style='font-weight: bold;'>{total_loss_count} keywords</span> dropped out of the Top 100 entirely (loss of <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only} clicks</span>).
+</li>
+</ul>
+
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Quick-Wins / Actionable Recommendations:</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li>
+I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshold Keywords (Low Hanging Fruits)</strong> currently ranking on positions 11-15. These already represent a significant <strong>search volume of {lhf_sv} SV</strong> on page 2. With targeted on-page adjustments, you can easily push them to page 1 to gain traffic.
+</li>
+</ul>"""
+        story_title = "Executive Summary & Marketing Story"
+
+    kpi_col1, kpi_col2 = st.columns([5, 3])
+    
+    with kpi_col1:
+        with st.container(border=True):
+            st.markdown(
+                f"""<h3 style='margin-top: 0; margin-bottom: 1rem; font-family: "Raleway", sans-serif; font-weight: 800; color: #232323;'>
+{story_title}
+</h3>
+{story_text}""", 
+                unsafe_allow_html=True
+            )
+            
+            # Callbacks to switch tabs programmatically with scrolling
+            def select_lhf_tab():
+                st.session_state["main_tabs"] = t["tab_lhf"]
+                st.query_params["tab"] = "lhf"
+                st.session_state["scroll_target"] = "low-hanging-fruits"
+                st.session_state["show_custom_loader"] = True
+
+            def select_top3_tab():
+                st.session_state["main_tabs"] = t["tab_drops"]
+                st.query_params["tab"] = "top3"
+                st.session_state["scroll_target"] = "top3-drops"
+                st.session_state["show_custom_loader"] = True
+
+            def select_top10_tab():
+                st.session_state["main_tabs"] = t["tab_drops"]
+                st.query_params["tab"] = "top10"
+                st.session_state["scroll_target"] = "top10-drops"
+                st.session_state["show_custom_loader"] = True
+
+            # Render action buttons in a row inside the container
+            b_col1, b_col2, b_col3 = st.columns(3)
+            with b_col1:
+                label_t3 = "Top 3 Drops" if lang == "EN" else "Top 3 Abstürze"
+                st.button(label_t3, key="goto_top3_btn", on_click=select_top3_tab, type="secondary", use_container_width=True)
+            with b_col2:
+                label_t10 = "Top 10 Drops" if lang == "EN" else "Top 10 Abstürze"
+                st.button(label_t10, key="goto_top10_btn", on_click=select_top10_tab, type="secondary", use_container_width=True)
+            with b_col3:
+                label_lhf = "Low Hanging Fruits"
+                st.button(label_lhf, key="goto_lhf_btn", on_click=select_lhf_tab, type="secondary", use_container_width=True)
+
+    with kpi_col2:
+        st.metric(t["kpi_net_change"], net_val_str, delta=pct_val_str)
+        
+        sub_c1, sub_c2 = st.columns(2)
+        with sub_c1:
+            st.metric(t["kpi_lost_total"], loss_val_str)
+        with sub_c2:
+            st.metric(t["kpi_gained_total"], gain_val_str)
+            
+        sub_c3, sub_c4 = st.columns(2)
+        with sub_c3:
+            st.metric(t["kpi_top3_drops"], f"{top3_count}", delta=top3_loss_str, delta_color="normal")
+        with sub_c4:
+            st.metric(t["kpi_top10_drops"], f"{top10_count}", delta=top10_loss_str, delta_color="normal")
+            
+        sub_c5, sub_c6 = st.columns(2)
+        with sub_c5:
+            st.metric(t["kpi_total_loss"], f"{total_loss_count}", delta=total_loss_loss_str, delta_color="normal", help=t.get("kpi_total_loss_help", ""))
+        with sub_c6:
+            st.metric(t["kpi_value_total"], value_val_str)
+            
+        st.metric(t["kpi_lhf"], f"{lhf_count}", delta=f"{lhf_sv} SV", delta_color="off", help=t["kpi_lhf_help"])
         
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
     
@@ -606,6 +868,49 @@ if uploaded_file is not None and st.session_state['analyzed']:
             st.plotly_chart(fig_t3, use_container_width=True)
         else:
             st.info(t["rd_t3_empty"])
+            
+    st.write("")
+    viz_col3, viz_col4 = st.columns(2)
+    with viz_col3:
+        st.markdown("#### " + t["kpi_intent_title"])
+        # Split multiple intents per keyword
+        intent_df = df.assign(Intent=df['Search Intent'].str.split(', ')).explode('Intent')
+        intent_counts = intent_df['Intent'].value_counts().reset_index()
+        intent_counts.columns = ['Search Intent', 'Count']
+        
+        color_map = {
+            "DO (Transactional)": "#90c274",
+            "KNOW": "#2ea3f2",
+            "regional:CITY": "#ffed00",
+            "regional:COUNTRY": "#f29e2e",
+            "undefined": "#dfdfdf"
+        }
+        
+        fig_pie = px.pie(
+            intent_counts, values='Count', names='Search Intent',
+            color='Search Intent', color_discrete_map=color_map,
+            hole=0.4,
+            height=280
+        )
+        style_plotly_fig(fig_pie)
+        fig_pie.update_layout(margin=dict(l=10, r=10, t=25, b=10))
+        st.plotly_chart(fig_pie, use_container_width=True)
+        
+    with viz_col4:
+        st.markdown("#### Details" if lang == "EN" else "#### Details")
+        intent_pct = intent_df['Intent'].value_counts(normalize=True).reset_index()
+        intent_pct.columns = ['Search Intent', 'Percentage']
+        intent_pct['Percentage'] = intent_pct['Percentage'].apply(lambda x: f"{x*100:.1f}%")
+        
+        intent_summary = pd.merge(intent_counts, intent_pct, on='Search Intent')
+        intent_summary.columns = [
+            'Search Intent' if lang == 'EN' else 'Suchintent',
+            'Keywords (Count)' if lang == 'EN' else 'Keywords (Anzahl)',
+            'Share (%)' if lang == 'EN' else 'Anteil (%)'
+        ]
+        
+        st.write("")
+        st.dataframe(intent_summary, use_container_width=True, hide_index=True)
             
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
 
@@ -651,6 +956,32 @@ if uploaded_file is not None and st.session_state['analyzed']:
         styler = styler.format(format_dict)
         st.dataframe(styler, use_container_width=True)
 
+    # Callback when user switches tab manually to keep query params in sync
+    def on_tab_change():
+        active_tab = st.session_state.get("main_tabs")
+        if active_tab == t["tab_lhf"]:
+            st.query_params["tab"] = "lhf"
+        elif active_tab == t["tab_drops"]:
+            st.query_params["tab"] = "drops"
+        else:
+            if "tab" in st.query_params:
+                del st.query_params["tab"]
+
+    # Handle deep-linking on initial load / rerun
+    if "tab" in st.query_params and "main_tabs" not in st.session_state:
+        param_val = st.query_params["tab"]
+        if param_val == "lhf":
+            st.session_state["main_tabs"] = t["tab_lhf"]
+            st.session_state["scroll_target"] = "low-hanging-fruits"
+        elif param_val == "top3":
+            st.session_state["main_tabs"] = t["tab_drops"]
+            st.session_state["scroll_target"] = "top3-drops"
+        elif param_val == "top10":
+            st.session_state["main_tabs"] = t["tab_drops"]
+            st.session_state["scroll_target"] = "top10-drops"
+        elif param_val == "drops":
+            st.session_state["main_tabs"] = t["tab_drops"]
+
     st.header("Details" if lang == "DE" else "Details")
     
     tab_d, tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -660,7 +991,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
         t["tab_lhf"],
         t["tab_winners"],
         t["tab_all"]
-    ])
+    ], key="main_tabs", on_change=on_tab_change)
     
     with tab_d:
         st.subheader(t["dir_sub"])
@@ -720,6 +1051,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
         f_page2 = page2_drops[page2_drops['Keyword'].astype(str).str.lower().str.contains(kw_filter, na=False)] if kw_filter else page2_drops
         f_total = total_loss[total_loss['Keyword'].astype(str).str.lower().str.contains(kw_filter, na=False)] if kw_filter else total_loss
         
+        st.markdown("<div id='top3-drops'></div>", unsafe_allow_html=True)
         st.markdown(t["rd_t3_title"])
         if not f_top3.empty:
             st.write(f"{t['rd_sum_vol']} **{format_num(int(f_top3['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_top3['Traffic Loss'].sum()))})")
@@ -727,6 +1059,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
         else:
             st.info(t["rd_t3_empty"])
             
+        st.markdown("<div id='top10-drops'></div>", unsafe_allow_html=True)
         st.markdown(t["rd_t10_title"])
         if not f_top10.empty:
             st.write(f"{t['rd_sum_vol']} **{format_num(int(f_top10['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_top10['Traffic Loss'].sum()))})")
@@ -777,26 +1110,36 @@ if uploaded_file is not None and st.session_state['analyzed']:
     with tab5:
         st.subheader(t["ad_sub"])
         
-        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+        f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
         
         all_clusters = sorted([c for c in df['Cluster'].dropna().unique() if c != 'undefined']) + ['undefined']
         with f_col1:
             sel_clusters = st.multiselect(t["ad_filter_cluster"], options=all_clusters)
             
-        all_changes = sorted(df['Change'].unique().tolist())
         with f_col2:
+            all_intents = set()
+            for val in df['Search Intent'].dropna().unique():
+                for piece in val.split(', '):
+                    all_intents.add(piece)
+            all_intents = sorted(list(all_intents))
+            sel_intents = st.multiselect(t["ad_filter_intent"], options=all_intents)
+            
+        all_changes = sorted(df['Change'].unique().tolist())
+        with f_col3:
             sel_changes = st.multiselect(t["ad_filter_change"], options=all_changes)
             
         all_dirs = sorted(df['Directory'].unique().tolist())
-        with f_col3:
+        with f_col4:
             sel_dirs = st.multiselect(t["ad_filter_dir"], options=all_dirs)
             
-        with f_col4:
+        with f_col5:
             search_kw = st.text_input(t["ad_filter_kw"]).strip().lower()
             
         filtered_df = df.copy()
         if sel_clusters:
             filtered_df = filtered_df[filtered_df['Cluster'].isin(sel_clusters)]
+        if sel_intents:
+            filtered_df = filtered_df[filtered_df['Search Intent'].apply(lambda x: any(c in x for c in sel_intents))]
         if sel_changes:
             filtered_df = filtered_df[filtered_df['Change'].isin(sel_changes)]
         if sel_dirs:
@@ -804,7 +1147,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
         if search_kw:
             filtered_df = filtered_df[filtered_df['Keyword'].astype(str).str.lower().str.contains(search_kw, na=False)]
             
-        all_cols = ['Cluster', 'Directory', 'Keyword', 'Change', 'Position Change', 'Traffic Change', 'Lost Value €', 'Position#1', 'Position#2', 'Search Volume', 'Traffic#1', 'Traffic#2', 'URL']
+        all_cols = ['Cluster', 'Search Intent', 'Directory', 'Keyword', 'Change', 'Position Change', 'Traffic Change', 'Lost Value €', 'Position#1', 'Position#2', 'Search Volume', 'Traffic#1', 'Traffic#2', 'URL']
         all_cols = [c for c in all_cols if c in filtered_df.columns]
         
         display_styled_dataframe(filtered_df[all_cols], sort_col='Traffic Change', ascending=True)
@@ -814,7 +1157,40 @@ else:
 
 # Footer
 st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
+
+version = "v1.0.0"
+try:
+    import subprocess
+    commit_count = subprocess.check_output(["git", "rev-list", "--count", "HEAD"], stderr=subprocess.DEVNULL).decode("utf-8").strip()
+    commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode("utf-8").strip()
+    if commit_count and commit_hash:
+        version = f"v1.0.{commit_count} ({commit_hash})"
+except Exception:
+    pass
+
+footer_text = f"{t['footer']} | <span style='opacity: 0.8;'>Version {version}</span>"
 st.markdown(
-    f"<div style='text-align: center; color: #797979; font-size: 0.9em;'>{t['footer']}</div>", 
+    f"<div style='text-align: center; color: #797979; font-size: 0.9em;'>{footer_text}</div>", 
     unsafe_allow_html=True
 )
+
+# Clear custom loader state at the end of the run
+if st.session_state.get("show_custom_loader"):
+    st.session_state["show_custom_loader"] = False
+    loading_placeholder.empty()
+
+# Execute smooth scroll down to selected target if flag is set
+if st.session_state.get("scroll_target"):
+    target_id = st.session_state["scroll_target"]
+    components.html(
+        f"""<script>
+        setTimeout(function() {{
+            var el = window.parent.document.getElementById("{target_id}");
+            if (el) {{
+                el.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+            }}
+        }}, 300);
+        </script>""",
+        height=0
+    )
+    st.session_state["scroll_target"] = None
