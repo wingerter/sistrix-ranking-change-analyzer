@@ -806,6 +806,10 @@ if uploaded_file is not None and st.session_state['analyzed']:
     lhf_sv = format_num(lhf_search_vol)
     lhf_pct = (lhf_search_vol / total_sv_old * 100) if total_sv_old > 0 else 0.0
     lhf_delta_str = f"+{lhf_sv} SV (+{format_num(lhf_pct, 1)}{pct_sign})"
+    
+    avg_pos_change_sign = "+" if avg_pos_change > 0 else ""
+    avg_pos_change_val_str = f"{avg_pos_change_sign}{format_num(avg_pos_change, 2)}"
+    avg_pos_change_delta_str = f"+{gained_keywords_count} / -{lost_keywords_count} KWs"
 
     if lang == "DE":
         story_text = f"""<p style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.6; font-size: 0.95rem; margin-bottom: 1rem;'>
