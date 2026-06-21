@@ -50,6 +50,17 @@ translations = {
         "info_upload": "Please upload a Sistrix CSV file and click 'Analyze'.",
         
         "kpi_header": "Overview: Business Impact",
+        "metric_basis_label": "Analysis Metric Basis",
+        "metric_basis_sv": "Search Volume (Hard Numbers)",
+        "metric_basis_clicks": "Estimated Clicks (CTR model)",
+        "kpi_lost_total_sv": "Lost Search Volume (Total)",
+        "kpi_gained_total_sv": "Gained Search Volume (Total)",
+        "kpi_net_change_sv": "Net Search Volume Change",
+        "kpi_avg_pos_change": "Avg. Position Change",
+        "dir_chart_title_sv": "Which directories lost the most search volume?",
+        "dir_chart_label_t_sv": "Lost Search Volume",
+        "cl_chart_title_sv": "Which topic clusters lost the most search volume?",
+        "cl_chart_label_t_sv": "Lost Search Volume",
         "kpi_lost_total": "Lost Traffic (Total)",
         "kpi_value_total": "Monetary Loss (Total)",
         "kpi_gained_total": "Gained Traffic (Total)",
@@ -175,6 +186,17 @@ You have the right to access, rectify, erase, or restrict the processing of your
         "info_upload": "Bitte lade eine Sistrix CSV-Datei hoch und klicke auf 'Analysieren'.",
         
         "kpi_header": "Überblick: Business Impact",
+        "metric_basis_label": "Analyse-Basis (Metrik)",
+        "metric_basis_sv": "Suchvolumen (Harte Zahlen)",
+        "metric_basis_clicks": "Klicks (CTR-Schätzung)",
+        "kpi_lost_total_sv": "Verlorenes Suchvolumen (Gesamt)",
+        "kpi_gained_total_sv": "Gewonnenes Suchvolumen (Gesamt)",
+        "kpi_net_change_sv": "Netto Suchvolumen-Veränderung",
+        "kpi_avg_pos_change": "Ø Positions-Veränderung",
+        "dir_chart_title_sv": "Welche Verzeichnisse haben am meisten Suchvolumen verloren?",
+        "dir_chart_label_t_sv": "Verlorenes Suchvolumen",
+        "cl_chart_title_sv": "Welche Themen-Cluster haben am meisten Suchvolumen verloren?",
+        "cl_chart_label_t_sv": "Verlorenes Suchvolumen",
         "kpi_lost_total": "Verlorener Traffic (Schätzung)",
         "kpi_value_total": "Monetärer Verlust (AdWords Äquiv.)",
         "kpi_gained_total": "Gewonnener Traffic (Schätzung)",
@@ -444,6 +466,10 @@ brand_input = st.sidebar.text_input(t["brand_input"], value="", help=t["brand_he
 num_clusters = st.sidebar.slider(t["cluster_count"], min_value=5, max_value=50, value=20, step=5)
 data_lang_choice = st.sidebar.selectbox(t["data_lang"], options=["Deutsch", "English"], index=0)
 
+st.sidebar.subheader("Analysierte Metrik" if lang == "DE" else "Analysis Metric")
+metric_basis_choice = st.sidebar.selectbox(t["metric_basis_label"], options=[t["metric_basis_sv"], t["metric_basis_clicks"]], index=0)
+metric_basis = "SV" if metric_basis_choice == t["metric_basis_sv"] else "Clicks"
+
 if 'analyzed' not in st.session_state:
     st.session_state['analyzed'] = False
 
@@ -547,6 +573,35 @@ if uploaded_file is not None and st.session_state['analyzed']:
     df['Lost Value €'] = df['Traffic Loss'].clip(lower=0) * df['CPC']
     df['Position Change'] = df['Position#1'] - df['Position#2']
     df['Traffic Change'] = df['Traffic#2'] - df['Traffic#1']
+    
+    # Dynamic Metric Calculations
+    if metric_basis == "Clicks":
+        df['Metric Loss'] = df['Traffic Loss'].clip(lower=0)
+        df['Metric Gain'] = df['Traffic Gain'].clip(lower=0)
+        df['Metric Change'] = df['Traffic Change']
+        metric_unit = "Klicks" if lang == "DE" else "clicks"
+    else:
+        # Search Volume mode
+        df['Metric Loss'] = 0.0
+        df.loc[df['Position Change'] < 0, 'Metric Loss'] = df['Search Volume']
+        df['Metric Gain'] = 0.0
+        df.loc[df['Position Change'] > 0, 'Metric Gain'] = df['Search Volume']
+        df['Metric Change'] = df['Metric Gain'] - df['Metric Loss']
+        metric_unit = "SV"
+
+    # Ranking-Veränderung Statistiken
+    gained_keywords_count = int((df['Position Change'] > 0).sum())
+    lost_keywords_count = int((df['Position Change'] < 0).sum())
+    avg_gain_pos = df[df['Position Change'] > 0]['Position Change'].mean()
+    if pd.isnull(avg_gain_pos): avg_gain_pos = 0.0
+    avg_loss_pos = abs(df[df['Position Change'] < 0]['Position Change'].mean())
+    if pd.isnull(avg_loss_pos): avg_loss_pos = 0.0
+    avg_pos_change = df['Position Change'].mean()
+    if pd.isnull(avg_pos_change): avg_pos_change = 0.0
+    
+    gained_keywords_sv = df[df['Position Change'] > 0]['Search Volume'].sum()
+    lost_keywords_sv = df[df['Position Change'] < 0]['Search Volume'].sum()
+    total_sv = df['Search Volume'].sum()
     
     def get_change_type(row):
         po = row['Position#1']
@@ -652,74 +707,103 @@ if uploaded_file is not None and st.session_state['analyzed']:
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
     
     # Segments
-    losers = df[df['Traffic Loss'] > 0].copy()
-    top3_drops = df[(df['Position#1'] <= 3) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
-    top10_drops = df[(df['Position#1'] <= 10) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
-    page2_drops = df[(df['Position#1'] > 10) & (df['Position#1'] <= 20) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
-    total_loss = df[(df['Position#1'] <= 100) & (df['Position#2'] > 100) & (df['Traffic Loss'] > 0)]
+    if metric_basis == "Clicks":
+        losers = df[df['Traffic Loss'] > 0].copy()
+        winners = df[df['Traffic Gain'] > 0].copy()
+        top3_drops = df[(df['Position#1'] <= 3) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
+        top10_drops = df[(df['Position#1'] <= 10) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
+        page2_drops = df[(df['Position#1'] > 10) & (df['Position#1'] <= 20) & (df['Position#2'] > df['Position#1']) & (df['Traffic Loss'] > 0)]
+        total_loss = df[(df['Position#1'] <= 100) & (df['Position#2'] > 100) & (df['Traffic Loss'] > 0)]
+    else:
+        # SV mode
+        losers = df[df['Position Change'] < 0].copy()
+        winners = df[df['Position Change'] > 0].copy()
+        top3_drops = df[(df['Position#1'] <= 3) & (df['Position Change'] < 0)]
+        top10_drops = df[(df['Position#1'] <= 10) & (df['Position Change'] < 0)]
+        page2_drops = df[(df['Position#1'] > 10) & (df['Position#1'] <= 20) & (df['Position Change'] < 0)]
+        total_loss = df[(df['Position#1'] <= 100) & (df['Position#2'] > 100)]
+        
     low_hanging = df[(df['Position#2'] >= 11) & (df['Position#2'] <= 15)]
-    winners = df[df['Traffic Gain'] > 0].copy()
     
     # --- KPIs ---
     st.header(t["kpi_header"])
     
-    total_traffic_loss = int(losers['Traffic Loss'].sum())
+    total_metric_loss = losers['Metric Loss'].sum()
     total_value_loss = losers['Lost Value €'].sum()
-    total_traffic_gained = int(winners['Traffic Gain'].sum())
-    net_traffic = total_traffic_gained - total_traffic_loss
+    total_metric_gained = winners['Metric Gain'].sum()
+    net_metric = total_metric_gained - total_metric_loss
     lhf_search_vol = int(low_hanging['Search Volume'].sum())
     
-    # Calculate percentage change for the delta of Net Traffic Change
-    total_traffic_old = df['Traffic#1'].sum()
-    pct_change = (net_traffic / total_traffic_old * 100) if total_traffic_old > 0 else 0.0
+    # Calculate percentage change for the delta of Net Change
+    total_metric_old = df['Traffic#1'].sum() if metric_basis == "Clicks" else df['Search Volume'].sum()
+    pct_change = (net_metric / total_metric_old * 100) if total_metric_old > 0 else 0.0
     pct_sign = " %" if lang == "DE" else "%"
-    if net_traffic > 0:
+    if net_metric > 0:
         pct_change_formatted = f"+{format_num(pct_change, decimal_places=1)}{pct_sign}"
-    elif net_traffic < 0:
+    elif net_metric < 0:
         pct_change_formatted = f"{format_num(pct_change, decimal_places=1)}{pct_sign}"
     else:
         pct_change_formatted = f"{format_num(0.0, decimal_places=1)}{pct_sign}"
         
     # Prepare data points for insertion
-    loss_val_str = f"-{format_num(total_traffic_loss)}"
-    gain_val_str = f"+{format_num(total_traffic_gained)}"
-    net_val_str = f"+{format_num(net_traffic)}" if net_traffic > 0 else format_num(net_traffic)
+    loss_val_str = f"-{format_num(int(total_metric_loss))}" + (" SV" if metric_basis == "SV" else "")
+    gain_val_str = f"+{format_num(int(total_metric_gained))}" + (" SV" if metric_basis == "SV" else "")
+    net_val_str = (f"+{format_num(int(net_metric))}" if net_metric > 0 else format_num(int(net_metric))) + (" SV" if metric_basis == "SV" else "")
     pct_val_str = pct_change_formatted
     value_val_str = f"-{format_num(total_value_loss, 2)} €" if lang == "DE" else f"-€{format_num(total_value_loss, 2)}"
     
     top3_count = len(top3_drops)
-    top3_loss_str = f"-{format_num(int(top3_drops['Traffic Loss'].sum()))} {t['traffic']}"
-    top3_loss_only = format_num(int(top3_drops['Traffic Loss'].sum()))
+    top3_loss_val = top3_drops['Metric Loss'].sum()
+    top3_loss_str = f"-{format_num(int(top3_loss_val))} {metric_unit}"
+    top3_loss_only = f"{format_num(int(top3_loss_val))} {metric_unit}"
     
     top10_count = len(top10_drops)
-    top10_loss_str = f"-{format_num(int(top10_drops['Traffic Loss'].sum()))} {t['traffic']}"
-    top10_loss_only = format_num(int(top10_drops['Traffic Loss'].sum()))
+    top10_loss_val = top10_drops['Metric Loss'].sum()
+    top10_loss_str = f"-{format_num(int(top10_loss_val))} {metric_unit}"
+    top10_loss_only = f"{format_num(int(top10_loss_val))} {metric_unit}"
     
     total_loss_count = len(total_loss)
-    total_loss_loss_str = f"-{format_num(int(total_loss['Traffic Loss'].sum()))} {t['traffic']}"
-    total_loss_loss_only = format_num(int(total_loss['Traffic Loss'].sum()))
+    total_loss_loss_val = total_loss['Metric Loss'].sum()
+    total_loss_loss_str = f"-{format_num(int(total_loss_loss_val))} {metric_unit}"
+    total_loss_loss_only = f"{format_num(int(total_loss_loss_val))} {metric_unit}"
     
     lhf_count = len(low_hanging)
     lhf_sv = format_num(lhf_search_vol)
 
     if lang == "DE":
         story_text = f"""<p style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.6; font-size: 0.95rem; margin-bottom: 1rem;'>
-Ich habe die Sistrix-Vergleichsdaten für Sie analysiert. Im betrachteten Zeitraum verzeichnete Ihre Website eine 
-<strong style='color: #232323;'>Netto-Traffic-Veränderung von <span style='color: {"#90c274" if net_traffic > 0 else "#d28063"}; font-weight: bold;'>{net_val_str} Klicks</span> ({pct_val_str})</strong>. 
-Dieser Netto-Effekt resultiert aus einem <strong>Zuwachs von <span style='color: #90c274; font-weight: bold;'>{gain_val_str} Klicks</span></strong> durch Gewinner-Keywords und einem <strong>Verlust von <span style='color: #d28063; font-weight: bold;'>{loss_val_str} Klicks</span></strong> bei den Verlierer-Keywords. 
-Der geschätzte monetäre Verlust (AdWords-Äquivalent) beläuft sich auf <strong style='color: #d28063;'>{value_val_str}</strong>.
-</p>
-
-<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Haupttreiber des Traffic-Verlusts:</h4>
+Im Vergleich vom <strong>{date_old.strftime('%d.%m.%Y')}</strong> zum <strong>{date_new.strftime('%d.%m.%Y')}</strong> verzeichnete Ihre Website eine 
+<strong style='color: #232323;'>Netto-Veränderung von <span style='color: {"#90c274" if net_metric > 0 else "#d28063"}; font-weight: bold;'>{net_val_str}</span> ({pct_val_str})</strong>. 
+Dieser Netto-Effekt resultiert aus einem <strong>Zuwachs von <span style='color: #90c274; font-weight: bold;'>{gain_val_str}</span></strong> durch verbesserte/Gewinner-Keywords und einem <strong>Verlust von <span style='color: #d28063; font-weight: bold;'>{loss_val_str}</span></strong> bei den verschlechterten/Verlierer-Keywords.
+"""
+        if metric_basis == "Clicks":
+            story_text += f"\nDer geschätzte monetäre Verlust (AdWords-Äquivalent) beläuft sich auf <strong style='color: #d28063;'>{value_val_str}</strong>."
+        story_text += "\n</p>"
+        
+        story_text += f"""
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Haupttreiber des Verlusts ({metric_basis_choice}):</h4>
 <ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Abstürze aus den Top 3:</strong> Ich konnte <span style='font-weight: bold;'>{top3_count} Keywords</span> identifizieren, die aus den absoluten Spitzenpositionen (1-3) herausgefallen sind, was einen Verlust von <span style='color: #d28063; font-weight: bold;'>{top3_loss_only} Klicks</span> zur Folge hatte. Diese Keywords erfordern Ihre sofortige Aufmerksamkeit.
+<strong>Abstürze aus den Top 3:</strong> Ich konnte <span style='font-weight: bold;'>{top3_count} Keywords</span> identifizieren, die aus den absoluten Spitzenpositionen (1-3) herausgefallen sind, was einen Verlust von <span style='color: #d28063; font-weight: bold;'>{top3_loss_only}</span> zur Folge hatte. Diese Keywords erfordern Ihre sofortige Aufmerksamkeit.
 </li>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Abstürze aus den Top 10:</strong> Weitere <span style='font-weight: bold;'>{top10_count} Keywords</span> haben die erste Seite (Top 10) verlassen. Dies hat den Traffic um <span style='color: #d28063; font-weight: bold;'>{top10_loss_only} Klicks</span> reduziert.
+<strong>Abstürze aus den Top 10:</strong> Weitere <span style='font-weight: bold;'>{top10_count} Keywords</span> haben die erste Seite (Top 10) verlassen. Dies hat die Metrik um <span style='color: #d28063; font-weight: bold;'>{top10_loss_only}</span> reduziert.
 </li>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Vollständige Ranking-Verluste:</strong> Insgesamt sind <span style='font-weight: bold;'>{total_loss_count} Keywords</span> komplett aus den Top 100 herausgefallen (Verlust: <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only} Klicks</span>).
+<strong>Vollständige Ranking-Verluste:</strong> Insgesamt sind <span style='font-weight: bold;'>{total_loss_count} Keywords</span> komplett aus den Top 100 herausgefallen (Verlust: <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only}</span>).
+</li>
+</ul>
+
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Ranking-Veränderungen (Harte Positions-Daten):</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Positions-Gewinne:</strong> <span style='font-weight: bold;'>{gained_keywords_count} Keywords</span> haben sich im Ranking verbessert (im Durchschnitt um <span style='color: #90c274; font-weight: bold;'>+{format_num(avg_gain_pos, 1)} Positionen</span>, Gesamt-Suchvolumen: <span style='font-weight: bold;'>{format_num(gained_keywords_sv)} SV</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Positions-Verluste:</strong> <span style='font-weight: bold;'>{lost_keywords_count} Keywords</span> haben sich im Ranking verschlechtert (im Durchschnitt um <span style='color: #d28063; font-weight: bold;'>-{format_num(avg_loss_pos, 1)} Positionen</span>, Gesamt-Suchvolumen: <span style='font-weight: bold;'>{format_num(lost_keywords_sv)} SV</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Gesamt-Tendenz:</strong> Die durchschnittliche Positions-Veränderung über alle Keywords beträgt <span style='font-weight: bold; color: {"#90c274" if avg_pos_change > 0 else "#d28063"};'>{"+" if avg_pos_change > 0 else ""}{format_num(avg_pos_change, 2)} Positionen</span> (Gesamt-Suchvolumen aller Keywords: <span style='font-weight: bold;'>{format_num(total_sv)} SV</span>).
 </li>
 </ul>
 
@@ -732,23 +816,39 @@ Ich empfehle Ihnen die On-Page-Optimierung für die <strong style='color: #90c27
         story_title = "Executive Summary & Marketing-Story"
     else:
         story_text = f"""<p style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.6; font-size: 0.95rem; margin-bottom: 1rem;'>
-I have analyzed the Sistrix comparison data for you. During the analyzed timeframe, your website recorded a 
-<strong style='color: #232323;'>Net Traffic Change of <span style='color: {"#90c274" if net_traffic > 0 else "#d28063"}; font-weight: bold;'>{net_val_str} clicks</span> ({pct_val_str})</strong>. 
-This net effect is composed of a <strong>gain of <span style='color: #90c274; font-weight: bold;'>{gain_val_str} clicks</span></strong> (winning keywords) 
-and a <strong>loss of <span style='color: #d28063; font-weight: bold;'>{loss_val_str} clicks</span></strong> (losing keywords). 
-The estimated monetary loss (AdWords equivalent) amounts to <strong style='color: #d28063;'>{value_val_str}</strong>.
-</p>
-
-<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Main Drivers of Traffic Loss:</h4>
+In comparison from <strong>{date_old.strftime('%d.%m.%Y')}</strong> to <strong>{date_new.strftime('%d.%m.%Y')}</strong>, your website recorded a 
+<strong style='color: #232323;'>Net Change of <span style='color: {"#90c274" if net_metric > 0 else "#d28063"}; font-weight: bold;'>{net_val_str}</span> ({pct_val_str})</strong>. 
+This net effect is composed of a <strong>gain of <span style='color: #90c274; font-weight: bold;'>{gain_val_str}</span></strong> (winning keywords) 
+and a <strong>loss of <span style='color: #d28063; font-weight: bold;'>{loss_val_str}</span></strong> (losing keywords).
+"""
+        if metric_basis == "Clicks":
+            story_text += f"\nThe estimated monetary loss (AdWords equivalent) amounts to <strong style='color: #d28063;'>{value_val_str}</strong>."
+        story_text += "\n</p>"
+        
+        story_text += f"""
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Main Drivers of Loss ({metric_basis_choice}):</h4>
 <ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Drops from Top 3:</strong> I identified <span style='font-weight: bold;'>{top3_count} keywords</span> that fell out of the top positions (1-3), causing a loss of <span style='color: #d28063; font-weight: bold;'>{top3_loss_only} clicks</span>. These keywords require your urgent optimization.
+<strong>Drops from Top 3:</strong> I identified <span style='font-weight: bold;'>{top3_count} keywords</span> that fell out of the top positions (1-3), causing a loss of <span style='color: #d28063; font-weight: bold;'>{top3_loss_only}</span>. These keywords require your urgent optimization.
 </li>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Drops from Top 10:</strong> An additional <span style='font-weight: bold;'>{top10_count} keywords</span> slipped off the first results page (Top 10), reducing traffic by <span style='color: #d28063; font-weight: bold;'>{top10_loss_only} clicks</span>.
+<strong>Drops from Top 10:</strong> An additional <span style='font-weight: bold;'>{top10_count} keywords</span> slipped off the first results page (Top 10), reducing the metric by <span style='color: #d28063; font-weight: bold;'>{top10_loss_only}</span>.
 </li>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Complete Ranking Losses:</strong> In total, <span style='font-weight: bold;'>{total_loss_count} keywords</span> dropped out of the Top 100 entirely (loss of <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only} clicks</span>).
+<strong>Complete Ranking Losses:</strong> In total, <span style='font-weight: bold;'>{total_loss_count} keywords</span> dropped out of the Top 100 entirely (loss of <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only}</span>).
+</li>
+</ul>
+
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Ranking Changes (Position Data):</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Position Gains:</strong> <span style='font-weight: bold;'>{gained_keywords_count} keywords</span> improved in rankings (by <span style='color: #90c274; font-weight: bold;'>+{format_num(avg_gain_pos, 1)} positions</span> on average, total search volume: <span style='font-weight: bold;'>{format_num(gained_keywords_sv)} SV</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Position Losses:</strong> <span style='font-weight: bold;'>{lost_keywords_count} keywords</span> deteriorated in rankings (by <span style='color: #d28063; font-weight: bold;'>-{format_num(avg_loss_pos, 1)} positions</span> on average, total search volume: <span style='font-weight: bold;'>{format_num(lost_keywords_sv)} SV</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Overall Trend:</strong> The average position change across all keywords is <span style='font-weight: bold; color: {"#90c274" if avg_pos_change > 0 else "#d28063"};'>{"+" if avg_pos_change > 0 else ""}{format_num(avg_pos_change, 2)} positions</span> (total search volume of all keywords: <span style='font-weight: bold;'>{format_num(total_sv)} SV</span>).
 </li>
 </ul>
 
@@ -804,25 +904,50 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
                 st.button(label_lhf, key="goto_lhf_btn", on_click=select_lhf_tab, type="secondary", use_container_width=True)
 
     with kpi_col2:
-        st.metric(t["kpi_net_change"], net_val_str, delta=pct_val_str)
-        
-        sub_c1, sub_c2 = st.columns(2)
-        with sub_c1:
-            st.metric(t["kpi_lost_total"], loss_val_str)
-        with sub_c2:
-            st.metric(t["kpi_gained_total"], gain_val_str)
+        if metric_basis == "Clicks":
+            st.metric(t["kpi_net_change"], net_val_str, delta=pct_val_str)
             
-        sub_c3, sub_c4 = st.columns(2)
-        with sub_c3:
-            st.metric(t["kpi_top3_drops"], f"{top3_count}", delta=top3_loss_str, delta_color="normal")
-        with sub_c4:
-            st.metric(t["kpi_top10_drops"], f"{top10_count}", delta=top10_loss_str, delta_color="normal")
+            sub_c1, sub_c2 = st.columns(2)
+            with sub_c1:
+                st.metric(t["kpi_lost_total"], loss_val_str)
+            with sub_c2:
+                st.metric(t["kpi_gained_total"], gain_val_str)
+                
+            sub_c3, sub_c4 = st.columns(2)
+            with sub_c3:
+                st.metric(t["kpi_top3_drops"], f"{top3_count}", delta=top3_loss_str, delta_color="normal")
+            with sub_c4:
+                st.metric(t["kpi_top10_drops"], f"{top10_count}", delta=top10_loss_str, delta_color="normal")
+                
+            sub_c5, sub_c6 = st.columns(2)
+            with sub_c5:
+                st.metric(t["kpi_total_loss"], f"{total_loss_count}", delta=total_loss_loss_str, delta_color="normal", help=t.get("kpi_total_loss_help", ""))
+            with sub_c6:
+                st.metric(t["kpi_value_total"], value_val_str)
+        else:
+            # SV mode
+            st.metric(t["kpi_net_change_sv"], net_val_str, delta=pct_val_str)
             
-        sub_c5, sub_c6 = st.columns(2)
-        with sub_c5:
-            st.metric(t["kpi_total_loss"], f"{total_loss_count}", delta=total_loss_loss_str, delta_color="normal", help=t.get("kpi_total_loss_help", ""))
-        with sub_c6:
-            st.metric(t["kpi_value_total"], value_val_str)
+            sub_c1, sub_c2 = st.columns(2)
+            with sub_c1:
+                st.metric(t["kpi_lost_total_sv"], loss_val_str)
+            with sub_c2:
+                st.metric(t["kpi_gained_total_sv"], gain_val_str)
+                
+            sub_c3, sub_c4 = st.columns(2)
+            with sub_c3:
+                st.metric(t["kpi_top3_drops"], f"{top3_count}", delta=top3_loss_str, delta_color="normal")
+            with sub_c4:
+                st.metric(t["kpi_top10_drops"], f"{top10_count}", delta=top10_loss_str, delta_color="normal")
+                
+            sub_c5, sub_c6 = st.columns(2)
+            with sub_c5:
+                st.metric(t["kpi_total_loss"], f"{total_loss_count}", delta=total_loss_loss_str, delta_color="normal", help=t.get("kpi_total_loss_help", ""))
+            with sub_c6:
+                sign = "+" if avg_pos_change > 0 else ""
+                avg_pos_change_val_str = f"{sign}{format_num(avg_pos_change, 2)}"
+                avg_pos_change_delta_str = f"+{gained_keywords_count} / -{lost_keywords_count} KWs"
+                st.metric(t["kpi_avg_pos_change"], avg_pos_change_val_str, delta=avg_pos_change_delta_str, delta_color="off")
             
         st.metric(t["kpi_lhf"], f"{lhf_count}", delta=f"{lhf_sv} SV", delta_color="off", help=t["kpi_lhf_help"])
         
@@ -831,24 +956,24 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
     viz_col1, viz_col2 = st.columns(2)
     with viz_col1:
         st.markdown("#### " + t["kpi_cluster_title"])
-        cluster_net = df.groupby('Cluster')['Traffic Change'].sum().reset_index()
+        cluster_net = df.groupby('Cluster')['Metric Change'].sum().reset_index()
         cluster_net = cluster_net[cluster_net['Cluster'] != "undefined"]
         
         if not cluster_net.empty:
-            best_cluster = cluster_net.loc[cluster_net['Traffic Change'].idxmax()]
-            worst_cluster = cluster_net.loc[cluster_net['Traffic Change'].idxmin()]
+            best_cluster = cluster_net.loc[cluster_net['Metric Change'].idxmax()]
+            worst_cluster = cluster_net.loc[cluster_net['Metric Change'].idxmin()]
             
             c1, c2 = st.columns(2)
             with c1:
-                st.metric(t["kpi_best_cluster"], best_cluster['Cluster'], f"+{format_num(int(best_cluster['Traffic Change']))} {t['traffic']}" if best_cluster['Traffic Change'] > 0 else f"{format_num(int(best_cluster['Traffic Change']))} {t['traffic']}")
+                st.metric(t["kpi_best_cluster"], best_cluster['Cluster'], f"+{format_num(int(best_cluster['Metric Change']))} {metric_unit}" if best_cluster['Metric Change'] > 0 else f"{format_num(int(best_cluster['Metric Change']))} {metric_unit}")
             with c2:
-                st.metric(t["kpi_worst_cluster"], worst_cluster['Cluster'], f"+{format_num(int(worst_cluster['Traffic Change']))} {t['traffic']}" if worst_cluster['Traffic Change'] > 0 else f"{format_num(int(worst_cluster['Traffic Change']))} {t['traffic']}")
+                st.metric(t["kpi_worst_cluster"], worst_cluster['Cluster'], f"+{format_num(int(worst_cluster['Metric Change']))} {metric_unit}" if worst_cluster['Metric Change'] > 0 else f"{format_num(int(worst_cluster['Metric Change']))} {metric_unit}")
                 
-            top_bottom = pd.concat([cluster_net.nlargest(3, 'Traffic Change'), cluster_net.nsmallest(3, 'Traffic Change')]).drop_duplicates()
-            top_bottom = top_bottom.sort_values('Traffic Change')
+            top_bottom = pd.concat([cluster_net.nlargest(3, 'Metric Change'), cluster_net.nsmallest(3, 'Metric Change')]).drop_duplicates()
+            top_bottom = top_bottom.sort_values('Metric Change')
             fig_net = px.bar(
-                top_bottom, x='Traffic Change', y='Cluster', orientation='h',
-                color='Traffic Change', color_continuous_scale=[[0.0, '#d28063'], [0.5, '#ffed00'], [1.0, '#90c274']],
+                top_bottom, x='Metric Change', y='Cluster', orientation='h',
+                color='Metric Change', color_continuous_scale=[[0.0, '#d28063'], [0.5, '#ffed00'], [1.0, '#90c274']],
                 height=200
             )
             style_plotly_fig(fig_net)
@@ -858,9 +983,9 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
     with viz_col2:
         st.markdown("#### " + t["kpi_top3_title"])
         if not top3_drops.empty:
-            worst_top3 = top3_drops.nlargest(5, 'Traffic Loss').sort_values('Traffic Loss', ascending=True)
+            worst_top3 = top3_drops.nlargest(5, 'Metric Loss').sort_values('Metric Loss', ascending=True)
             fig_t3 = px.bar(
-                worst_top3, x='Traffic Loss', y='Keyword', orientation='h',
+                worst_top3, x='Metric Loss', y='Keyword', orientation='h',
                 color_discrete_sequence=['#d28063'], height=270
             )
             style_plotly_fig(fig_t3)
@@ -997,16 +1122,16 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
         st.subheader(t["dir_sub"])
         if not top10_drops.empty:
             dir_vol = top10_drops.groupby('Directory').agg(
-                Traffic_Loss=('Traffic Loss', 'sum'),
+                Metric_Loss=('Metric Loss', 'sum'),
                 Value_Loss=('Lost Value €', 'sum')
             ).reset_index()
-            dir_vol = dir_vol[dir_vol['Traffic_Loss'] > 0].sort_values('Traffic_Loss', ascending=False).head(15)
+            dir_vol = dir_vol[dir_vol['Metric_Loss'] > 0].sort_values('Metric_Loss', ascending=False).head(15)
             
-            fig = px.bar(dir_vol, x='Directory', y='Traffic_Loss', 
-                         title=t["dir_chart_title"],
-                         labels={'Directory': t["dir_chart_label_d"], 'Traffic_Loss': t["dir_chart_label_t"]},
-                         hover_data=['Value_Loss'],
-                         color='Traffic_Loss', color_continuous_scale=[[0.0, '#dfdfdf'], [1.0, '#d28063']])
+            fig = px.bar(dir_vol, x='Directory', y='Metric_Loss', 
+                         title=t["dir_chart_title_sv"] if metric_basis == "SV" else t["dir_chart_title"],
+                         labels={'Directory': t["dir_chart_label_d"], 'Metric_Loss': t["dir_chart_label_t_sv"] if metric_basis == "SV" else t["dir_chart_label_t"]},
+                         hover_data=['Value_Loss'] if metric_basis == "Clicks" else [],
+                         color='Metric_Loss', color_continuous_scale=[[0.0, '#dfdfdf'], [1.0, '#d28063']])
             style_plotly_fig(fig)
             st.plotly_chart(fig, use_container_width=True)
         else:
@@ -1018,17 +1143,17 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
         
         if not losers.empty:
             cluster_vol = losers.groupby('Cluster').agg(
-                Traffic_Loss=('Traffic Loss', 'sum'),
+                Metric_Loss=('Metric Loss', 'sum'),
                 Value_Loss=('Lost Value €', 'sum'),
                 Keyword_Count=('Keyword', 'count')
             ).reset_index()
-            cluster_vol = cluster_vol[cluster_vol['Traffic_Loss'] > 0].sort_values('Traffic_Loss', ascending=False)
+            cluster_vol = cluster_vol[cluster_vol['Metric_Loss'] > 0].sort_values('Metric_Loss', ascending=False)
             
-            fig_cluster = px.bar(cluster_vol, x='Cluster', y='Traffic_Loss', 
-                         title=t["cl_chart_title"],
-                         labels={'Cluster': t["cl_chart_label_c"], 'Traffic_Loss': t["cl_chart_label_t"]},
-                         hover_data=['Value_Loss', 'Keyword_Count'],
-                         color='Traffic_Loss', color_continuous_scale=[[0.0, '#dfdfdf'], [1.0, '#d28063']])
+            fig_cluster = px.bar(cluster_vol, x='Cluster', y='Metric_Loss', 
+                         title=t["cl_chart_title_sv"] if metric_basis == "SV" else t["cl_chart_title"],
+                         labels={'Cluster': t["cl_chart_label_c"], 'Metric_Loss': t["cl_chart_label_t_sv"] if metric_basis == "SV" else t["cl_chart_label_t"]},
+                         hover_data=['Value_Loss', 'Keyword_Count'] if metric_basis == "Clicks" else ['Keyword_Count'],
+                         color='Metric_Loss', color_continuous_scale=[[0.0, '#dfdfdf'], [1.0, '#d28063']])
             style_plotly_fig(fig_cluster)
             st.plotly_chart(fig_cluster, use_container_width=True)
             
@@ -1038,7 +1163,7 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
             if selected_clusters:
                 cluster_df = losers[losers['Cluster'].isin(selected_clusters)]
                 st.write(f"{t['cl_sum']} **{format_num(int(cluster_df['Search Volume'].sum()))}**")
-                display_styled_dataframe(cluster_df[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
+                display_styled_dataframe(cluster_df[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Search Volume' if metric_basis == "SV" else 'Traffic Loss')
         else:
             st.info(t["cl_empty"])
 
@@ -1054,30 +1179,42 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
         st.markdown("<div id='top3-drops'></div>", unsafe_allow_html=True)
         st.markdown(t["rd_t3_title"])
         if not f_top3.empty:
-            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_top3['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_top3['Traffic Loss'].sum()))})")
-            display_styled_dataframe(f_top3[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
+            top3_sub_str = f"{t['rd_sum_vol']} **{format_num(int(f_top3['Search Volume'].sum()))}**"
+            if metric_basis == "Clicks":
+                top3_sub_str += f" {t['rd_sum_traf']} {format_num(int(f_top3['Traffic Loss'].sum()))})"
+            st.write(top3_sub_str)
+            display_styled_dataframe(f_top3[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Search Volume' if metric_basis == "SV" else 'Traffic Loss')
         else:
             st.info(t["rd_t3_empty"])
             
         st.markdown("<div id='top10-drops'></div>", unsafe_allow_html=True)
         st.markdown(t["rd_t10_title"])
         if not f_top10.empty:
-            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_top10['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_top10['Traffic Loss'].sum()))})")
-            display_styled_dataframe(f_top10[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
+            top10_sub_str = f"{t['rd_sum_vol']} **{format_num(int(f_top10['Search Volume'].sum()))}**"
+            if metric_basis == "Clicks":
+                top10_sub_str += f" {t['rd_sum_traf']} {format_num(int(f_top10['Traffic Loss'].sum()))})"
+            st.write(top10_sub_str)
+            display_styled_dataframe(f_top10[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Search Volume' if metric_basis == "SV" else 'Traffic Loss')
         else:
             st.info(t["rd_t10_empty"])
             
         st.markdown(t["rd_p2_title"])
         if not f_page2.empty:
-            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_page2['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_page2['Traffic Loss'].sum()))})")
-            display_styled_dataframe(f_page2[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
+            page2_sub_str = f"{t['rd_sum_vol']} **{format_num(int(f_page2['Search Volume'].sum()))}**"
+            if metric_basis == "Clicks":
+                page2_sub_str += f" {t['rd_sum_traf']} {format_num(int(f_page2['Traffic Loss'].sum()))})"
+            st.write(page2_sub_str)
+            display_styled_dataframe(f_page2[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Search Volume' if metric_basis == "SV" else 'Traffic Loss')
         else:
             st.info(t["rd_p2_empty"])
             
         st.markdown(t["rd_100_title"])
         if not f_total.empty:
-            st.write(f"{t['rd_sum_vol']} **{format_num(int(f_total['Search Volume'].sum()))}** {t['rd_sum_traf']} {format_num(int(f_total['Traffic Loss'].sum()))})")
-            display_styled_dataframe(f_total[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Traffic Loss')
+            total_sub_str = f"{t['rd_sum_vol']} **{format_num(int(f_total['Search Volume'].sum()))}**"
+            if metric_basis == "Clicks":
+                total_sub_str += f" {t['rd_sum_traf']} {format_num(int(f_total['Traffic Loss'].sum()))})"
+            st.write(total_sub_str)
+            display_styled_dataframe(f_total[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Loss', 'Lost Value €', 'Directory', 'URL']], sort_col='Search Volume' if metric_basis == "SV" else 'Traffic Loss')
         else:
             st.info(t["rd_100_empty"])
 
@@ -1092,11 +1229,11 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
     with tab4:
         st.subheader(t["win_sub"])
         if not winners.empty:
-            display_styled_dataframe(winners[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Gain', 'Directory']], sort_col='Traffic Gain')
+            display_styled_dataframe(winners[['Keyword', 'Position Change', 'Position#1', 'Position#2', 'Search Volume', 'Traffic Gain', 'Directory']], sort_col='Search Volume' if metric_basis == "SV" else 'Traffic Gain')
             
             fig_win = px.scatter(
                 winners, x="Search Volume", y="Position#2", 
-                size="Traffic Gain", color="Directory",
+                size="Search Volume" if metric_basis == "SV" else "Traffic Gain", color="Directory",
                 hover_name="Keyword", title=t["win_chart_title"],
                 labels={'Position#2': t["win_chart_label_pos"]},
                 color_discrete_sequence=['#2ea3f2', '#90c274', '#e2a312', '#993333', '#797979']
@@ -1150,7 +1287,7 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
         all_cols = ['Cluster', 'Search Intent', 'Directory', 'Keyword', 'Change', 'Position Change', 'Traffic Change', 'Lost Value €', 'Position#1', 'Position#2', 'Search Volume', 'Traffic#1', 'Traffic#2', 'URL']
         all_cols = [c for c in all_cols if c in filtered_df.columns]
         
-        display_styled_dataframe(filtered_df[all_cols], sort_col='Traffic Change', ascending=True)
+        display_styled_dataframe(filtered_df[all_cols], sort_col='Position Change' if metric_basis == "SV" else 'Traffic Change', ascending=True)
 
 else:
     st.info(t.get("info_upload", "Bitte lade eine Sistrix CSV-Datei hoch und klicke auf 'Analysieren'."))
