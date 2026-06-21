@@ -457,7 +457,17 @@ if st.session_state.get("show_custom_loader"):
 # Sidebar - Settings
 st.sidebar.header(t["sidebar_data"])
 
-uploaded_file = st.sidebar.file_uploader(t["upload_label"], type=["csv"])
+if 'analyzed' not in st.session_state:
+    st.session_state['analyzed'] = False
+
+def trigger_analysis():
+    st.session_state['analyzed'] = True
+    st.session_state['show_custom_loader'] = True
+
+def on_file_upload():
+    st.session_state['analyzed'] = False
+
+uploaded_file = st.sidebar.file_uploader(t["upload_label"], type=["csv"], on_change=on_file_upload)
 
 st.sidebar.subheader(t["dates_header"])
 date_old = st.sidebar.date_input(t["date_old"], value=pd.to_datetime('today') - pd.DateOffset(months=1))
@@ -475,12 +485,8 @@ data_lang_choice = st.sidebar.selectbox(
 
 metric_basis = "SV"
 
-if 'analyzed' not in st.session_state:
-    st.session_state['analyzed'] = False
-
 if uploaded_file is not None:
-    if st.sidebar.button(t["btn_analyze"], type="primary"):
-        st.session_state['analyzed'] = True
+    st.sidebar.button(t["btn_analyze"], type="primary", on_click=trigger_analysis)
 
 # Sidebar - Legal Disclosures
 st.sidebar.markdown("---")
