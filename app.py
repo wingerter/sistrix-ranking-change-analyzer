@@ -774,6 +774,8 @@ if uploaded_file is not None and st.session_state['analyzed']:
     loss_clicks_val_str = f"-{format_num(int(total_clicks_loss))} {clicks_unit}"
     gain_clicks_val_str = f"+{format_num(int(total_clicks_gain))} {clicks_unit}"
     
+    total_metric_old = total_clicks_old if metric_basis == "Clicks" else total_sv_old
+    
     # 3. Monetary Loss Metrics (AdWords Equivalent Value)
     total_value_old = (df['Traffic#1'] * df['CPC']).sum()
     total_value_loss = df['Lost Value €'].sum()  # Already clipped at 0 in dataframe
