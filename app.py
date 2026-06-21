@@ -50,9 +50,6 @@ translations = {
         "info_upload": "Please upload a Sistrix CSV file and click 'Analyze'.",
         
         "kpi_header": "Overview: Business Impact",
-        "metric_basis_label": "Analysis Metric Basis",
-        "metric_basis_sv": "Search Volume (Hard Numbers)",
-        "metric_basis_clicks": "Estimated Clicks (CTR model)",
         "kpi_lost_total_sv": "Lost Search Volume (Total)",
         "kpi_gained_total_sv": "Gained Search Volume (Total)",
         "kpi_net_change_sv": "Net Search Volume Change",
@@ -62,7 +59,7 @@ translations = {
         "cl_chart_title_sv": "Which topic clusters lost the most search volume?",
         "cl_chart_label_t_sv": "Lost Search Volume",
         "kpi_lost_total": "Lost Traffic (Total)",
-        "kpi_value_total": "Monetary Loss (Total)",
+        "kpi_value_total": "Monetary Loss (AdWords Equivalent)",
         "kpi_gained_total": "Gained Traffic (Total)",
         "kpi_net_change": "Net Traffic Change",
         "kpi_top3_drops": "Top 3 Drops",
@@ -186,9 +183,6 @@ You have the right to access, rectify, erase, or restrict the processing of your
         "info_upload": "Bitte lade eine Sistrix CSV-Datei hoch und klicke auf 'Analysieren'.",
         
         "kpi_header": "Überblick: Business Impact",
-        "metric_basis_label": "Analyse-Basis (Metrik)",
-        "metric_basis_sv": "Suchvolumen (Harte Zahlen)",
-        "metric_basis_clicks": "Klicks (CTR-Schätzung)",
         "kpi_lost_total_sv": "Verlorenes Suchvolumen (Gesamt)",
         "kpi_gained_total_sv": "Gewonnenes Suchvolumen (Gesamt)",
         "kpi_net_change_sv": "Netto Suchvolumen-Veränderung",
@@ -198,7 +192,7 @@ You have the right to access, rectify, erase, or restrict the processing of your
         "cl_chart_title_sv": "Welche Themen-Cluster haben am meisten Suchvolumen verloren?",
         "cl_chart_label_t_sv": "Verlorenes Suchvolumen",
         "kpi_lost_total": "Verlorener Traffic (Schätzung)",
-        "kpi_value_total": "Monetärer Verlust (AdWords Äquiv.)",
+        "kpi_value_total": "Monetärer Verlust (AdWords-Äquivalent)",
         "kpi_gained_total": "Gewonnener Traffic (Schätzung)",
         "kpi_net_change": "Netto Traffic-Veränderung",
         "kpi_top3_drops": "Top 3 Abstürze",
@@ -466,9 +460,7 @@ brand_input = st.sidebar.text_input(t["brand_input"], value="", help=t["brand_he
 num_clusters = st.sidebar.slider(t["cluster_count"], min_value=5, max_value=50, value=20, step=5)
 data_lang_choice = st.sidebar.selectbox(t["data_lang"], options=["Deutsch", "English"], index=0)
 
-st.sidebar.subheader("Analysierte Metrik" if lang == "DE" else "Analysis Metric")
-metric_basis_choice = st.sidebar.selectbox(t["metric_basis_label"], options=[t["metric_basis_sv"], t["metric_basis_clicks"]], index=0)
-metric_basis = "SV" if metric_basis_choice == t["metric_basis_sv"] else "Clicks"
+metric_basis = "SV"
 
 if 'analyzed' not in st.session_state:
     st.session_state['analyzed'] = False
@@ -728,134 +720,150 @@ if uploaded_file is not None and st.session_state['analyzed']:
     # --- KPIs ---
     st.header(t["kpi_header"])
     
-    total_metric_loss = losers['Metric Loss'].sum()
-    total_value_loss = losers['Lost Value €'].sum()
-    total_metric_gained = winners['Metric Gain'].sum()
-    net_metric = total_metric_gained - total_metric_loss
-    lhf_search_vol = int(low_hanging['Search Volume'].sum())
-    
-    # Calculate percentage change for the delta of Net Change
-    total_metric_old = df['Traffic#1'].sum() if metric_basis == "Clicks" else df['Search Volume'].sum()
-    pct_change = (net_metric / total_metric_old * 100) if total_metric_old > 0 else 0.0
+    # 1. Search Volume Metrics (Primary for text and rankings)
+    total_sv_old = df['Search Volume'].sum()
+    total_sv_loss = losers['Search Volume'].sum()
+    total_sv_gained = winners['Search Volume'].sum()
+    net_sv = total_sv_gained - total_sv_loss
+    pct_sv_change = (net_sv / total_sv_old * 100) if total_sv_old > 0 else 0.0
     pct_sign = " %" if lang == "DE" else "%"
-    if net_metric > 0:
-        pct_change_formatted = f"+{format_num(pct_change, decimal_places=1)}{pct_sign}"
-    elif net_metric < 0:
-        pct_change_formatted = f"{format_num(pct_change, decimal_places=1)}{pct_sign}"
-    else:
-        pct_change_formatted = f"{format_num(0.0, decimal_places=1)}{pct_sign}"
-        
-    # Prepare data points for insertion
-    loss_val_str = f"-{format_num(int(total_metric_loss))}" + (" SV" if metric_basis == "SV" else "")
-    gain_val_str = f"+{format_num(int(total_metric_gained))}" + (" SV" if metric_basis == "SV" else "")
-    net_val_str = (f"+{format_num(int(net_metric))}" if net_metric > 0 else format_num(int(net_metric))) + (" SV" if metric_basis == "SV" else "")
-    pct_val_str = pct_change_formatted
-    value_val_str = f"-{format_num(total_value_loss, 2)} €" if lang == "DE" else f"-€{format_num(total_value_loss, 2)}"
     
+    # SV Formatted strings
+    net_sv_sign = "+" if net_sv > 0 else ""
+    net_sv_val_str = f"{net_sv_sign}{format_num(int(net_sv))} SV"
+    pct_sv_val_str = f"{net_sv_sign}{format_num(pct_sv_change, 1)}{pct_sign}"
+    
+    loss_sv_pct_str = f"-{format_num(total_sv_loss / total_sv_old * 100 if total_sv_old > 0 else 0.0, 1)}{pct_sign}"
+    gain_sv_pct_str = f"+{format_num(total_sv_gained / total_sv_old * 100 if total_sv_old > 0 else 0.0, 1)}{pct_sign}"
+    
+    loss_sv_val_str = f"-{format_num(int(total_sv_loss))} SV"
+    gain_sv_val_str = f"+{format_num(int(total_sv_gained))} SV"
+    
+    # 2. Click-Based Metrics (Estimated Traffic)
+    total_clicks_old = df['Traffic#1'].sum()
+    total_clicks_loss = df['Traffic Loss'].clip(lower=0).sum()
+    total_clicks_gain = df['Traffic Gain'].clip(lower=0).sum()
+    net_clicks = total_clicks_gain - total_clicks_loss
+    pct_clicks_change = (net_clicks / total_clicks_old * 100) if total_clicks_old > 0 else 0.0
+    
+    # Clicks Formatted strings
+    clicks_unit = "Klicks" if lang == "DE" else "clicks"
+    net_clicks_sign = "+" if net_clicks > 0 else ""
+    net_clicks_val_str = f"{net_clicks_sign}{format_num(int(net_clicks))} {clicks_unit}"
+    pct_clicks_val_str = f"{net_clicks_sign}{format_num(pct_clicks_change, 1)}{pct_sign}"
+    
+    loss_clicks_pct_str = f"-{format_num(total_clicks_loss / total_clicks_old * 100 if total_clicks_old > 0 else 0.0, 1)}{pct_sign}"
+    gain_clicks_pct_str = f"+{format_num(total_clicks_gain / total_clicks_old * 100 if total_clicks_old > 0 else 0.0, 1)}{pct_sign}"
+    
+    loss_clicks_val_str = f"-{format_num(int(total_clicks_loss))} {clicks_unit}"
+    gain_clicks_val_str = f"+{format_num(int(total_clicks_gain))} {clicks_unit}"
+    
+    # 3. Monetary Loss Metrics (AdWords Equivalent Value)
+    total_value_old = (df['Traffic#1'] * df['CPC']).sum()
+    total_value_loss = df['Lost Value €'].sum()  # Already clipped at 0 in dataframe
+    pct_value_change = (total_value_loss / total_value_old * 100) if total_value_old > 0 else 0.0
+    
+    value_val_str = f"-{format_num(total_value_loss, 2)} €" if lang == "DE" else f"-€{format_num(total_value_loss, 2)}"
+    value_pct_str = f"-{format_num(pct_value_change, 1)}{pct_sign}"
+    
+    # 4. Segment Drops (using SV)
     top3_count = len(top3_drops)
-    top3_loss_val = top3_drops['Metric Loss'].sum()
-    top3_loss_str = f"-{format_num(int(top3_loss_val))} {metric_unit}"
-    top3_loss_only = f"{format_num(int(top3_loss_val))} {metric_unit}"
+    top3_loss_val = top3_drops['Search Volume'].sum()
+    top3_pct = (top3_loss_val / total_sv_old * 100) if total_sv_old > 0 else 0.0
+    top3_loss_str = f"-{format_num(int(top3_loss_val))} SV (-{format_num(top3_pct, 1)}{pct_sign})"
+    top3_loss_only = f"{format_num(int(top3_loss_val))} SV"
     
     top10_count = len(top10_drops)
-    top10_loss_val = top10_drops['Metric Loss'].sum()
-    top10_loss_str = f"-{format_num(int(top10_loss_val))} {metric_unit}"
-    top10_loss_only = f"{format_num(int(top10_loss_val))} {metric_unit}"
+    top10_loss_val = top10_drops['Search Volume'].sum()
+    top10_pct = (top10_loss_val / total_sv_old * 100) if total_sv_old > 0 else 0.0
+    top10_loss_str = f"-{format_num(int(top10_loss_val))} SV (-{format_num(top10_pct, 1)}{pct_sign})"
+    top10_loss_only = f"{format_num(int(top10_loss_val))} SV"
     
     total_loss_count = len(total_loss)
-    total_loss_loss_val = total_loss['Metric Loss'].sum()
-    total_loss_loss_str = f"-{format_num(int(total_loss_loss_val))} {metric_unit}"
-    total_loss_loss_only = f"{format_num(int(total_loss_loss_val))} {metric_unit}"
+    total_loss_loss_val = total_loss['Search Volume'].sum()
+    total_loss_pct = (total_loss_loss_val / total_sv_old * 100) if total_sv_old > 0 else 0.0
+    total_loss_loss_str = f"-{format_num(int(total_loss_loss_val))} SV (-{format_num(total_loss_pct, 1)}{pct_sign})"
+    total_loss_loss_only = f"{format_num(int(total_loss_loss_val))} SV"
     
     lhf_count = len(low_hanging)
+    lhf_search_vol = int(low_hanging['Search Volume'].sum())
     lhf_sv = format_num(lhf_search_vol)
+    lhf_pct = (lhf_search_vol / total_sv_old * 100) if total_sv_old > 0 else 0.0
+    lhf_delta_str = f"+{lhf_sv} SV (+{format_num(lhf_pct, 1)}{pct_sign})"
 
     if lang == "DE":
         story_text = f"""<p style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.6; font-size: 0.95rem; margin-bottom: 1rem;'>
-Im Vergleich vom <strong>{date_old.strftime('%d.%m.%Y')}</strong> zum <strong>{date_new.strftime('%d.%m.%Y')}</strong> verzeichnete Ihre Website eine 
-<strong style='color: #232323;'>Netto-Veränderung von <span style='color: {"#90c274" if net_metric > 0 else "#d28063"}; font-weight: bold;'>{net_val_str}</span> ({pct_val_str})</strong>. 
-Dieser Netto-Effekt resultiert aus einem <strong>Zuwachs von <span style='color: #90c274; font-weight: bold;'>{gain_val_str}</span></strong> durch verbesserte/Gewinner-Keywords und einem <strong>Verlust von <span style='color: #d28063; font-weight: bold;'>{loss_val_str}</span></strong> bei den verschlechterten/Verlierer-Keywords.
-"""
-        if metric_basis == "Clicks":
-            story_text += f"\nDer geschätzte monetäre Verlust (AdWords-Äquivalent) beläuft sich auf <strong style='color: #d28063;'>{value_val_str}</strong>."
-        story_text += "\n</p>"
-        
-        story_text += f"""
-<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Haupttreiber des Verlusts ({metric_basis_choice}):</h4>
-<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
-<li style='margin-bottom: 0.5rem;'>
-<strong>Abstürze aus den Top 3:</strong> Ich konnte <span style='font-weight: bold;'>{top3_count} Keywords</span> identifizieren, die aus den absoluten Spitzenpositionen (1-3) herausgefallen sind, was einen Verlust von <span style='color: #d28063; font-weight: bold;'>{top3_loss_only}</span> zur Folge hatte. Diese Keywords erfordern Ihre sofortige Aufmerksamkeit.
-</li>
-<li style='margin-bottom: 0.5rem;'>
-<strong>Abstürze aus den Top 10:</strong> Weitere <span style='font-weight: bold;'>{top10_count} Keywords</span> haben die erste Seite (Top 10) verlassen. Dies hat die Metrik um <span style='color: #d28063; font-weight: bold;'>{top10_loss_only}</span> reduziert.
-</li>
-<li style='margin-bottom: 0.5rem;'>
-<strong>Vollständige Ranking-Verluste:</strong> Insgesamt sind <span style='font-weight: bold;'>{total_loss_count} Keywords</span> komplett aus den Top 100 herausgefallen (Verlust: <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only}</span>).
-</li>
-</ul>
+Im Vergleich vom <strong>{date_old.strftime('%d.%m.%Y')}</strong> zum <strong>{date_new.strftime('%d.%m.%Y')}</strong> verzeichnete Ihre Website folgende Ranking-Entwicklungen:
+</p>
 
-<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Ranking-Veränderungen (Harte Positions-Daten):</h4>
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Ranking-Veränderungen (Positions-Daten):</h4>
 <ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Positions-Gewinne:</strong> <span style='font-weight: bold;'>{gained_keywords_count} Keywords</span> haben sich im Ranking verbessert (im Durchschnitt um <span style='color: #90c274; font-weight: bold;'>+{format_num(avg_gain_pos, 1)} Positionen</span>, Gesamt-Suchvolumen: <span style='font-weight: bold;'>{format_num(gained_keywords_sv)} SV</span>).
+<strong>Positions-Gewinne:</strong> <span style='font-weight: bold;'>{format_num(gained_keywords_count)} Keywords</span> haben sich im Ranking verbessert (im Durchschnitt um <span style='color: #90c274; font-weight: bold;'>+{format_num(avg_gain_pos, 1)} Positionen</span>, Gesamt-Suchvolumen: <span style='font-weight: bold;'>{format_num(gained_keywords_sv)} SV</span>).
 </li>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Positions-Verluste:</strong> <span style='font-weight: bold;'>{lost_keywords_count} Keywords</span> haben sich im Ranking verschlechtert (im Durchschnitt um <span style='color: #d28063; font-weight: bold;'>-{format_num(avg_loss_pos, 1)} Positionen</span>, Gesamt-Suchvolumen: <span style='font-weight: bold;'>{format_num(lost_keywords_sv)} SV</span>).
+<strong>Positions-Verluste:</strong> <span style='font-weight: bold;'>{format_num(lost_keywords_count)} Keywords</span> haben sich im Ranking verschlechtert (im Durchschnitt um <span style='color: #d28063; font-weight: bold;'>-{format_num(avg_loss_pos, 1)} Positionen</span>, Gesamt-Suchvolumen: <span style='font-weight: bold;'>{format_num(lost_keywords_sv)} SV</span>).
 </li>
 <li style='margin-bottom: 0.5rem;'>
 <strong>Gesamt-Tendenz:</strong> Die durchschnittliche Positions-Veränderung über alle Keywords beträgt <span style='font-weight: bold; color: {"#90c274" if avg_pos_change > 0 else "#d28063"};'>{"+" if avg_pos_change > 0 else ""}{format_num(avg_pos_change, 2)} Positionen</span> (Gesamt-Suchvolumen aller Keywords: <span style='font-weight: bold;'>{format_num(total_sv)} SV</span>).
 </li>
 </ul>
 
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Haupttreiber der Ranking-Abstürze:</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Abstürze aus den Top 3:</strong> <span style='font-weight: bold;'>{format_num(top3_count)} Keywords</span> verloren Top-Positionen (Verlust von <span style='color: #d28063; font-weight: bold;'>{top3_loss_only}</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Abstürze aus den Top 10:</strong> Weitere <span style='font-weight: bold;'>{format_num(top10_count)} Keywords</span> fielen von Seite 1 (Verlust von <span style='color: #d28063; font-weight: bold;'>{top10_loss_only}</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Vollständige Ranking-Verluste:</strong> Insgesamt sind <span style='font-weight: bold;'>{format_num(total_loss_count)} Keywords</span> komplett aus den Top 100 herausgefallen (Verlust von <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only}</span>).
+</li>
+</ul>
+
 <h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Quick-Wins / Handlungsempfehlungen:</h4>
 <ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
 <li>
-Ich empfehle Ihnen die On-Page-Optimierung für die <strong style='color: #90c274;'>{lhf_count} Schwellen-Keywords (Low Hanging Fruits)</strong> auf den Positionen 11-15. Diese Keywords weisen bereits ein beträchtliches <strong>Suchvolumen von {lhf_sv} SV</strong> auf der zweiten Ergebnisseite auf. Mit gezielten inhaltlichen Anpassungen können Sie diese schnell auf Seite 1 heben.
+Ich empfehle Ihnen die On-Page-Optimierung für die <strong style='color: #90c274;'>{format_num(lhf_count)} Schwellen-Keywords (Low Hanging Fruits)</strong> auf den Positionen 11-15. Diese Keywords weisen bereits ein beträchtliches <strong>Suchvolumen von {lhf_sv} SV</strong> auf der zweiten Ergebnisseite auf. Mit gezielten inhaltlichen Anpassungen können Sie diese schnell auf Seite 1 heben.
 </li>
 </ul>"""
         story_title = "Executive Summary & Marketing-Story"
     else:
         story_text = f"""<p style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.6; font-size: 0.95rem; margin-bottom: 1rem;'>
-In comparison from <strong>{date_old.strftime('%d.%m.%Y')}</strong> to <strong>{date_new.strftime('%d.%m.%Y')}</strong>, your website recorded a 
-<strong style='color: #232323;'>Net Change of <span style='color: {"#90c274" if net_metric > 0 else "#d28063"}; font-weight: bold;'>{net_val_str}</span> ({pct_val_str})</strong>. 
-This net effect is composed of a <strong>gain of <span style='color: #90c274; font-weight: bold;'>{gain_val_str}</span></strong> (winning keywords) 
-and a <strong>loss of <span style='color: #d28063; font-weight: bold;'>{loss_val_str}</span></strong> (losing keywords).
-"""
-        if metric_basis == "Clicks":
-            story_text += f"\nThe estimated monetary loss (AdWords equivalent) amounts to <strong style='color: #d28063;'>{value_val_str}</strong>."
-        story_text += "\n</p>"
-        
-        story_text += f"""
-<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Main Drivers of Loss ({metric_basis_choice}):</h4>
-<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
-<li style='margin-bottom: 0.5rem;'>
-<strong>Drops from Top 3:</strong> I identified <span style='font-weight: bold;'>{top3_count} keywords</span> that fell out of the top positions (1-3), causing a loss of <span style='color: #d28063; font-weight: bold;'>{top3_loss_only}</span>. These keywords require your urgent optimization.
-</li>
-<li style='margin-bottom: 0.5rem;'>
-<strong>Drops from Top 10:</strong> An additional <span style='font-weight: bold;'>{top10_count} keywords</span> slipped off the first results page (Top 10), reducing the metric by <span style='color: #d28063; font-weight: bold;'>{top10_loss_only}</span>.
-</li>
-<li style='margin-bottom: 0.5rem;'>
-<strong>Complete Ranking Losses:</strong> In total, <span style='font-weight: bold;'>{total_loss_count} keywords</span> dropped out of the Top 100 entirely (loss of <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only}</span>).
-</li>
-</ul>
+Comparing <strong>{date_old.strftime('%d.%m.%Y')}</strong> to <strong>{date_new.strftime('%d.%m.%Y')}</strong>, your website recorded the following ranking developments:
+</p>
 
 <h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Ranking Changes (Position Data):</h4>
 <ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Position Gains:</strong> <span style='font-weight: bold;'>{gained_keywords_count} keywords</span> improved in rankings (by <span style='color: #90c274; font-weight: bold;'>+{format_num(avg_gain_pos, 1)} positions</span> on average, total search volume: <span style='font-weight: bold;'>{format_num(gained_keywords_sv)} SV</span>).
+<strong>Position Gains:</strong> <span style='font-weight: bold;'>{format_num(gained_keywords_count)} keywords</span> improved in rankings (by <span style='color: #90c274; font-weight: bold;'>+{format_num(avg_gain_pos, 1)} positions</span> on average, total search volume: <span style='font-weight: bold;'>{format_num(gained_keywords_sv)} SV</span>).
 </li>
 <li style='margin-bottom: 0.5rem;'>
-<strong>Position Losses:</strong> <span style='font-weight: bold;'>{lost_keywords_count} keywords</span> deteriorated in rankings (by <span style='color: #d28063; font-weight: bold;'>-{format_num(avg_loss_pos, 1)} positions</span> on average, total search volume: <span style='font-weight: bold;'>{format_num(lost_keywords_sv)} SV</span>).
+<strong>Position Losses:</strong> <span style='font-weight: bold;'>{format_num(lost_keywords_count)} keywords</span> deteriorated in rankings (by <span style='color: #d28063; font-weight: bold;'>-{format_num(avg_loss_pos, 1)} positions</span> on average, total search volume: <span style='font-weight: bold;'>{format_num(lost_keywords_sv)} SV</span>).
 </li>
 <li style='margin-bottom: 0.5rem;'>
 <strong>Overall Trend:</strong> The average position change across all keywords is <span style='font-weight: bold; color: {"#90c274" if avg_pos_change > 0 else "#d28063"};'>{"+" if avg_pos_change > 0 else ""}{format_num(avg_pos_change, 2)} positions</span> (total search volume of all keywords: <span style='font-weight: bold;'>{format_num(total_sv)} SV</span>).
 </li>
 </ul>
 
+<h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Main Drivers of Ranking Drops:</h4>
+<ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Drops from Top 3:</strong> <span style='font-weight: bold;'>{format_num(top3_count)} keywords</span> lost top positions (loss of <span style='color: #d28063; font-weight: bold;'>{top3_loss_only}</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Drops from Top 10:</strong> An additional <span style='font-weight: bold;'>{format_num(top10_count)} keywords</span> fell off page 1 (loss of <span style='color: #d28063; font-weight: bold;'>{top10_loss_only}</span>).
+</li>
+<li style='margin-bottom: 0.5rem;'>
+<strong>Complete Ranking Losses:</strong> In total, <span style='font-weight: bold;'>{format_num(total_loss_count)} keywords</span> dropped out of the Top 100 entirely (loss of <span style='color: #d28063; font-weight: bold;'>{total_loss_loss_only}</span>).
+</li>
+</ul>
+
 <h4 style='font-family: "Raleway", sans-serif; font-weight: 700; color: #232323; margin-top: 1rem; margin-bottom: 0.5rem;'>Quick-Wins / Actionable Recommendations:</h4>
 <ul style='font-family: "Open Sans", sans-serif; color: #444444; line-height: 1.5; font-size: 0.95rem; padding-left: 1.2rem; margin-top: 0;'>
 <li>
-I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshold Keywords (Low Hanging Fruits)</strong> currently ranking on positions 11-15. These already represent a significant <strong>search volume of {lhf_sv} SV</strong> on page 2. With targeted on-page adjustments, you can easily push them to page 1 to gain traffic.
+I recommend focusing on the <strong style='color: #90c274;'>{format_num(lhf_count)} Threshold Keywords (Low Hanging Fruits)</strong> currently ranking on positions 11-15. These already represent a significant <strong>search volume of {lhf_sv} SV</strong> on page 2. With targeted on-page adjustments, you can easily push them to page 1 to gain traffic.
 </li>
 </ul>"""
         story_title = "Executive Summary & Marketing Story"
@@ -904,52 +912,40 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
                 st.button(label_lhf, key="goto_lhf_btn", on_click=select_lhf_tab, type="secondary", use_container_width=True)
 
     with kpi_col2:
-        if metric_basis == "Clicks":
-            st.metric(t["kpi_net_change"], net_val_str, delta=pct_val_str)
+        # Row 1: Net Change SV & Net Change Traffic
+        row1_col1, row1_col2 = st.columns(2)
+        with row1_col1:
+            st.metric(t["kpi_net_change_sv"], net_sv_val_str, delta=pct_sv_val_str)
+        with row1_col2:
+            st.metric(t["kpi_net_change"], net_clicks_val_str, delta=pct_clicks_val_str)
             
-            sub_c1, sub_c2 = st.columns(2)
-            with sub_c1:
-                st.metric(t["kpi_lost_total"], loss_val_str)
-            with sub_c2:
-                st.metric(t["kpi_gained_total"], gain_val_str)
-                
-            sub_c3, sub_c4 = st.columns(2)
-            with sub_c3:
-                st.metric(t["kpi_top3_drops"], f"{top3_count}", delta=top3_loss_str, delta_color="normal")
-            with sub_c4:
-                st.metric(t["kpi_top10_drops"], f"{top10_count}", delta=top10_loss_str, delta_color="normal")
-                
-            sub_c5, sub_c6 = st.columns(2)
-            with sub_c5:
-                st.metric(t["kpi_total_loss"], f"{total_loss_count}", delta=total_loss_loss_str, delta_color="normal", help=t.get("kpi_total_loss_help", ""))
-            with sub_c6:
-                st.metric(t["kpi_value_total"], value_val_str)
-        else:
-            # SV mode
-            st.metric(t["kpi_net_change_sv"], net_val_str, delta=pct_val_str)
+        # Row 2: Lost SV & Gained SV
+        row2_col1, row2_col2 = st.columns(2)
+        with row2_col1:
+            st.metric(t["kpi_lost_total_sv"], loss_sv_val_str, delta=loss_sv_pct_str, delta_color="normal")
+        with row2_col2:
+            st.metric(t["kpi_gained_total_sv"], gain_sv_val_str, delta=gain_sv_pct_str, delta_color="normal")
             
-            sub_c1, sub_c2 = st.columns(2)
-            with sub_c1:
-                st.metric(t["kpi_lost_total_sv"], loss_val_str)
-            with sub_c2:
-                st.metric(t["kpi_gained_total_sv"], gain_val_str)
-                
-            sub_c3, sub_c4 = st.columns(2)
-            with sub_c3:
-                st.metric(t["kpi_top3_drops"], f"{top3_count}", delta=top3_loss_str, delta_color="normal")
-            with sub_c4:
-                st.metric(t["kpi_top10_drops"], f"{top10_count}", delta=top10_loss_str, delta_color="normal")
-                
-            sub_c5, sub_c6 = st.columns(2)
-            with sub_c5:
-                st.metric(t["kpi_total_loss"], f"{total_loss_count}", delta=total_loss_loss_str, delta_color="normal", help=t.get("kpi_total_loss_help", ""))
-            with sub_c6:
-                sign = "+" if avg_pos_change > 0 else ""
-                avg_pos_change_val_str = f"{sign}{format_num(avg_pos_change, 2)}"
-                avg_pos_change_delta_str = f"+{gained_keywords_count} / -{lost_keywords_count} KWs"
-                st.metric(t["kpi_avg_pos_change"], avg_pos_change_val_str, delta=avg_pos_change_delta_str, delta_color="off")
+        # Row 3: Top 3 Drops & Top 10 Drops
+        row3_col1, row3_col2 = st.columns(2)
+        with row3_col1:
+            st.metric(t["kpi_top3_drops"], format_num(top3_count), delta=top3_loss_str, delta_color="normal")
+        with row3_col2:
+            st.metric(t["kpi_top10_drops"], format_num(top10_count), delta=top10_loss_str, delta_color="normal")
             
-        st.metric(t["kpi_lhf"], f"{lhf_count}", delta=f"{lhf_sv} SV", delta_color="off", help=t["kpi_lhf_help"])
+        # Row 4: Complete Losses & Monetary Loss
+        row4_col1, row4_col2 = st.columns(2)
+        with row4_col1:
+            st.metric(t["kpi_total_loss"], format_num(total_loss_count), delta=total_loss_loss_str, delta_color="normal", help=t.get("kpi_total_loss_help", ""))
+        with row4_col2:
+            st.metric(t["kpi_value_total"], value_val_str, delta=value_pct_str, delta_color="normal")
+            
+        # Row 5: Avg Position Change & Low Hanging Fruits
+        row5_col1, row5_col2 = st.columns(2)
+        with row5_col1:
+            st.metric(t["kpi_avg_pos_change"], avg_pos_change_val_str, delta=avg_pos_change_delta_str, delta_color="off")
+        with row5_col2:
+            st.metric(t["kpi_lhf"], format_num(lhf_count), delta=lhf_delta_str, delta_color="off", help=t["kpi_lhf_help"])
         
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
     
@@ -963,11 +959,22 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
             best_cluster = cluster_net.loc[cluster_net['Metric Change'].idxmax()]
             worst_cluster = cluster_net.loc[cluster_net['Metric Change'].idxmin()]
             
+            best_pct = (best_cluster['Metric Change'] / total_metric_old * 100) if total_metric_old > 0 else 0.0
+            worst_pct = (worst_cluster['Metric Change'] / total_metric_old * 100) if total_metric_old > 0 else 0.0
+            
+            best_sign = "+" if best_cluster['Metric Change'] > 0 else ""
+            worst_sign = "+" if worst_cluster['Metric Change'] > 0 else ""
+            best_pct_sign = "+" if best_pct > 0 else ""
+            worst_pct_sign = "+" if worst_pct > 0 else ""
+            
+            best_delta = f"{best_sign}{format_num(int(best_cluster['Metric Change']))} {metric_unit} ({best_pct_sign}{format_num(best_pct, 1)}{pct_sign})"
+            worst_delta = f"{worst_sign}{format_num(int(worst_cluster['Metric Change']))} {metric_unit} ({worst_pct_sign}{format_num(worst_pct, 1)}{pct_sign})"
+            
             c1, c2 = st.columns(2)
             with c1:
-                st.metric(t["kpi_best_cluster"], best_cluster['Cluster'], f"+{format_num(int(best_cluster['Metric Change']))} {metric_unit}" if best_cluster['Metric Change'] > 0 else f"{format_num(int(best_cluster['Metric Change']))} {metric_unit}")
+                st.metric(t["kpi_best_cluster"], best_cluster['Cluster'], delta=best_delta)
             with c2:
-                st.metric(t["kpi_worst_cluster"], worst_cluster['Cluster'], f"+{format_num(int(worst_cluster['Metric Change']))} {metric_unit}" if worst_cluster['Metric Change'] > 0 else f"{format_num(int(worst_cluster['Metric Change']))} {metric_unit}")
+                st.metric(t["kpi_worst_cluster"], worst_cluster['Cluster'], delta=worst_delta)
                 
             top_bottom = pd.concat([cluster_net.nlargest(3, 'Metric Change'), cluster_net.nsmallest(3, 'Metric Change')]).drop_duplicates()
             top_bottom = top_bottom.sort_values('Metric Change')
@@ -1025,17 +1032,21 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
         st.markdown("#### Details" if lang == "EN" else "#### Details")
         intent_pct = intent_df['Intent'].value_counts(normalize=True).reset_index()
         intent_pct.columns = ['Search Intent', 'Percentage']
-        intent_pct['Percentage'] = intent_pct['Percentage'].apply(lambda x: f"{x*100:.1f}%")
+        intent_pct['Percentage'] = intent_pct['Percentage'] * 100
         
         intent_summary = pd.merge(intent_counts, intent_pct, on='Search Intent')
-        intent_summary.columns = [
-            'Search Intent' if lang == 'EN' else 'Suchintent',
-            'Keywords (Count)' if lang == 'EN' else 'Keywords (Anzahl)',
-            'Share (%)' if lang == 'EN' else 'Anteil (%)'
-        ]
+        col_intent = 'Search Intent' if lang == 'EN' else 'Suchintent'
+        col_count = 'Keywords (Count)' if lang == 'EN' else 'Keywords (Anzahl)'
+        col_share = 'Share (%)' if lang == 'EN' else 'Anteil (%)'
+        intent_summary.columns = [col_intent, col_count, col_share]
+        
+        formatted_intent_summary = intent_summary.copy()
+        formatted_intent_summary[col_count] = formatted_intent_summary[col_count].apply(lambda x: format_num(x))
+        pct_sign = " %" if lang == "DE" else "%"
+        formatted_intent_summary[col_share] = formatted_intent_summary[col_share].apply(lambda x: f"{format_num(x, 1)}{pct_sign}")
         
         st.write("")
-        st.dataframe(intent_summary, use_container_width=True, hide_index=True)
+        st.dataframe(formatted_intent_summary, use_container_width=True, hide_index=True)
             
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
 
@@ -1072,7 +1083,7 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
         
         if 'Position Change' in df_to_show.columns:
             styler = styler.map(lambda x: 'color: #90c274; font-weight: bold;' if pd.notnull(x) and x > 0 else ('color: #d28063; font-weight: bold;' if pd.notnull(x) and x < 0 else ''), subset=['Position Change'])
-            format_dict['Position Change'] = lambda x: f"▲ +{format_num(abs(x), 2)}" if pd.notnull(x) and x > 0 else (f"▼ -{format_num(abs(x), 2)}" if pd.notnull(x) and x < 0 else "0,00")
+            format_dict['Position Change'] = lambda x: f"▲ +{format_num(abs(x), 2)}" if pd.notnull(x) and x > 0 else (f"▼ -{format_num(abs(x), 2)}" if pd.notnull(x) and x < 0 else format_num(0.0, 2))
             
         if 'Traffic Change' in df_to_show.columns:
             styler = styler.map(lambda x: 'color: #90c274; font-weight: bold;' if pd.notnull(x) and x > 0 else ('color: #d28063; font-weight: bold;' if pd.notnull(x) and x < 0 else ''), subset=['Traffic Change'])
