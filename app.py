@@ -127,6 +127,10 @@ translations = {
         "ad_filter_kw": "Search Keyword",
         "ad_filter_intent": "Filter by Search Intent",
         "data_lang": "Data Language (for Search Intent)",
+        "data_lang_options": ["German", "English", "Other"],
+        "data_lang_help": "Select the language of your keyword data to correctly determine search intent (KNOW, DO, regional). If 'Other' is selected, search intent analysis is skipped.",
+        "intent_not_analyzed_msg": "Search intent analysis was skipped because data language is set to 'Other'.",
+        "intent_not_analyzed": "Not Analyzed",
         "kpi_intent_title": "Search Intent Distribution",
         "traffic": "Traffic",
         "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Created in Munich & Bangkok with ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a> | Co-developed with Antigravity",
@@ -261,6 +265,10 @@ You have the right to access, rectify, erase, or restrict the processing of your
         "ad_filter_kw": "Keyword suchen",
         "ad_filter_intent": "Nach Suchintent filtern",
         "data_lang": "Daten-Sprache (für Suchintent)",
+        "data_lang_options": ["Deutsch", "English", "Andere"],
+        "data_lang_help": "Wähle die Sprache Deiner Keyword-Daten aus, um den Suchintent (KNOW, DO, regional) korrekt zu bestimmen. Wenn 'Andere' gewählt wird, wird keine Suchintent-Analyse durchgeführt.",
+        "intent_not_analyzed_msg": "Die Suchintent-Analyse wurde übersprungen, da die Daten-Sprache auf 'Andere' eingestellt ist.",
+        "intent_not_analyzed": "Nicht analysiert",
         "kpi_intent_title": "Suchintents-Verteilung",
         "footer": "MIT License &copy; 2026 Benjamin &quot;SEOux Indianer&quot; Wingerter | Erstellt in München & Bangkok mit ❤️ | <a href='https://seouxindianer.de' target='_blank' style='color: #2ea3f2; text-decoration: underline;'>seouxindianer.de</a> | Mitentwickelt von Antigravity",
         "legal_header": "Rechtliches / Impressum",
@@ -458,7 +466,12 @@ date_new = st.sidebar.date_input(t["date_new"], value=pd.to_datetime('today'))
 st.sidebar.subheader(t["cluster_settings"])
 brand_input = st.sidebar.text_input(t["brand_input"], value="", help=t["brand_help"])
 num_clusters = st.sidebar.slider(t["cluster_count"], min_value=5, max_value=50, value=20, step=5)
-data_lang_choice = st.sidebar.selectbox(t["data_lang"], options=["Deutsch", "English"], index=0)
+data_lang_choice = st.sidebar.selectbox(
+    t["data_lang"], 
+    options=t["data_lang_options"], 
+    index=0,
+    help=t["data_lang_help"]
+)
 
 metric_basis = "SV"
 
@@ -658,7 +671,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
     def get_intent(kw):
         kw_lower = str(kw).lower()
         intents = []
-        if data_lang_choice == "Deutsch":
+        if data_lang_choice == t["data_lang_options"][0]:
             # User Intent: KNOW
             if re.search(r'((.*\s|^)w(er|em|en|essen|ie|ann|o|elche|as|obei|omit|oran|orin|ohin|obei|eshalb|arum|ieso|orauf|orum|ovor|ogegen|odurch|oher|eswegen|oraus)\s.*)|((.*\s|^)anleitung|anweisung|beschreibung|bestimmung|bin ich|definition|erklärung|forum|frage|gesetz|guide|(.*\s|^)hilfe|how to|muss|kann(\s.*|$)|(.*\s|^)darf|methode|quora|rechtlich|regeln|tipps|tutorial|brauche|vor was|walkthrough|diy|yahoo clever|gute frage)(\s.*|$)', kw_lower):
                 intents.append("KNOW")
@@ -675,7 +688,7 @@ if uploaded_file is not None and st.session_state['analyzed']:
             if re.search(r'.*belgien.*|.*bulgarien.*|.*dänemark.*|.*deutschland.*|.*estland.*|.*finnland.*|.*frankreich.*|.*griechenland.*|.*irland.*|.*italien.*|.*kroatien.*|.*lettland.*|.*litauen.*|.*luxemburg.*|.*malta.*|.*niederlande.*|.*österreich.*|.*polen.*|.*portugal.*|.*rumänien.*', kw_lower):
                 intents.append("regional:COUNTRY")
                 
-        elif data_lang_choice == "English":
+        elif data_lang_choice == t["data_lang_options"][1]:
             # User Intent: KNOW
             if re.search(r'\b(who|what|where|when|why|how|which|whose|whom|guide|tutorial|tips|definition|explain|explanation|how\s+to|faq|forum|info|information|meaning|instruction|manual|example|examples|case\s+study|learn|training|course|help|support|diy|walkthrough)\b', kw_lower):
                 intents.append("KNOW")
@@ -694,7 +707,10 @@ if uploaded_file is not None and st.session_state['analyzed']:
                 
         return ", ".join(intents) if intents else "undefined"
 
-    df['Search Intent'] = df['Keyword'].apply(get_intent)
+    if data_lang_choice == t["data_lang_options"][2]:
+        df['Search Intent'] = 'not analyzed'
+    else:
+        df['Search Intent'] = df['Keyword'].apply(get_intent)
     
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
     
@@ -1002,51 +1018,54 @@ I recommend focusing on the <strong style='color: #90c274;'>{format_num(lhf_coun
             st.info(t["rd_t3_empty"])
             
     st.write("")
-    viz_col3, viz_col4 = st.columns(2)
-    with viz_col3:
-        st.markdown("#### " + t["kpi_intent_title"])
-        # Split multiple intents per keyword
-        intent_df = df.assign(Intent=df['Search Intent'].str.split(', ')).explode('Intent')
-        intent_counts = intent_df['Intent'].value_counts().reset_index()
-        intent_counts.columns = ['Search Intent', 'Count']
-        
-        color_map = {
-            "DO (Transactional)": "#90c274",
-            "KNOW": "#2ea3f2",
-            "regional:CITY": "#ffed00",
-            "regional:COUNTRY": "#f29e2e",
-            "undefined": "#dfdfdf"
-        }
-        
-        fig_pie = px.pie(
-            intent_counts, values='Count', names='Search Intent',
-            color='Search Intent', color_discrete_map=color_map,
-            hole=0.4,
-            height=280
-        )
-        style_plotly_fig(fig_pie)
-        fig_pie.update_layout(margin=dict(l=10, r=10, t=25, b=10))
-        st.plotly_chart(fig_pie, use_container_width=True)
-        
-    with viz_col4:
-        st.markdown("#### Details" if lang == "EN" else "#### Details")
-        intent_pct = intent_df['Intent'].value_counts(normalize=True).reset_index()
-        intent_pct.columns = ['Search Intent', 'Percentage']
-        intent_pct['Percentage'] = intent_pct['Percentage'] * 100
-        
-        intent_summary = pd.merge(intent_counts, intent_pct, on='Search Intent')
-        col_intent = 'Search Intent' if lang == 'EN' else 'Suchintent'
-        col_count = 'Keywords (Count)' if lang == 'EN' else 'Keywords (Anzahl)'
-        col_share = 'Share (%)' if lang == 'EN' else 'Anteil (%)'
-        intent_summary.columns = [col_intent, col_count, col_share]
-        
-        formatted_intent_summary = intent_summary.copy()
-        formatted_intent_summary[col_count] = formatted_intent_summary[col_count].apply(lambda x: format_num(x))
-        pct_sign = " %" if lang == "DE" else "%"
-        formatted_intent_summary[col_share] = formatted_intent_summary[col_share].apply(lambda x: f"{format_num(x, 1)}{pct_sign}")
-        
-        st.write("")
-        st.dataframe(formatted_intent_summary, use_container_width=True, hide_index=True)
+    if data_lang_choice == t["data_lang_options"][2]:
+        st.info(t["intent_not_analyzed_msg"])
+    else:
+        viz_col3, viz_col4 = st.columns(2)
+        with viz_col3:
+            st.markdown("#### " + t["kpi_intent_title"])
+            # Split multiple intents per keyword
+            intent_df = df.assign(Intent=df['Search Intent'].str.split(', ')).explode('Intent')
+            intent_counts = intent_df['Intent'].value_counts().reset_index()
+            intent_counts.columns = ['Search Intent', 'Count']
+            
+            color_map = {
+                "DO (Transactional)": "#90c274",
+                "KNOW": "#2ea3f2",
+                "regional:CITY": "#ffed00",
+                "regional:COUNTRY": "#f29e2e",
+                "undefined": "#dfdfdf"
+            }
+            
+            fig_pie = px.pie(
+                intent_counts, values='Count', names='Search Intent',
+                color='Search Intent', color_discrete_map=color_map,
+                hole=0.4,
+                height=280
+            )
+            style_plotly_fig(fig_pie)
+            fig_pie.update_layout(margin=dict(l=10, r=10, t=25, b=10))
+            st.plotly_chart(fig_pie, use_container_width=True)
+            
+        with viz_col4:
+            st.markdown("#### Details" if lang == "EN" else "#### Details")
+            intent_pct = intent_df['Intent'].value_counts(normalize=True).reset_index()
+            intent_pct.columns = ['Search Intent', 'Percentage']
+            intent_pct['Percentage'] = intent_pct['Percentage'] * 100
+            
+            intent_summary = pd.merge(intent_counts, intent_pct, on='Search Intent')
+            col_intent = 'Search Intent' if lang == 'EN' else 'Suchintent'
+            col_count = 'Keywords (Count)' if lang == 'EN' else 'Keywords (Anzahl)'
+            col_share = 'Share (%)' if lang == 'EN' else 'Anteil (%)'
+            intent_summary.columns = [col_intent, col_count, col_share]
+            
+            formatted_intent_summary = intent_summary.copy()
+            formatted_intent_summary[col_count] = formatted_intent_summary[col_count].apply(lambda x: format_num(x))
+            pct_sign = " %" if lang == "DE" else "%"
+            formatted_intent_summary[col_share] = formatted_intent_summary[col_share].apply(lambda x: f"{format_num(x, 1)}{pct_sign}")
+            
+            st.write("")
+            st.dataframe(formatted_intent_summary, use_container_width=True, hide_index=True)
             
     st.markdown("<hr class='hr--grey'>", unsafe_allow_html=True)
 
@@ -1265,12 +1284,13 @@ I recommend focusing on the <strong style='color: #90c274;'>{format_num(lhf_coun
             sel_clusters = st.multiselect(t["ad_filter_cluster"], options=all_clusters)
             
         with f_col2:
+            is_disabled = (data_lang_choice == t["data_lang_options"][2])
             all_intents = set()
             for val in df['Search Intent'].dropna().unique():
                 for piece in val.split(', '):
                     all_intents.add(piece)
             all_intents = sorted(list(all_intents))
-            sel_intents = st.multiselect(t["ad_filter_intent"], options=all_intents)
+            sel_intents = st.multiselect(t["ad_filter_intent"], options=all_intents, disabled=is_disabled)
             
         all_changes = sorted(df['Change'].unique().tolist())
         with f_col3:
