@@ -9,11 +9,16 @@ Dieses Tool geht weit über das reine Zählen von Rankings hinaus: Es bewertet A
 
 - **Robustes CSV-Parsing:** Frisst Sistrix-CSV-Exporte (Vergleiche) in allen gängigen Codierungen (UTF-8, Latin1, UTF-16) und Trennzeichen vollautomatisch.
 - **🌍 Zweisprachiges UI:** Das gesamte Dashboard lässt sich mit einem Klick zwischen Deutsch und Englisch umschalten (inkl. Flaggen-Icons).
+- **📊 Executive Summary & Marketing-Story:** Ein geteiltes Dashboard mit einer narrativen Zusammenfassung (Sie-Form) und kompakten, gestapelten KPI-Metriken auf der rechten Seite.
+- **⚡ Quick-Jump Navigation:** Interaktive Buttons im Executive Summary leiten Nutzer mit sanftem Scrollen direkt zu den wichtigsten Datenbereichen (Top 3 Drops, Top 10 Drops, Low Hanging Fruits).
+- **🎯 Automatische Search Intent Klassifizierung:** Clustert Suchanfragen für Deutsch und Englisch in `KNOW`, `DO (Transactional)`, `regional:CITY`, `regional:COUNTRY` und `undefined` zur präzisen Intent-Analyse.
 - **🤖 KI-Freies NLP-Clustering:** Clustert tausende Verlierer-Keywords vollautomatisch und in Millisekunden in Themenbereiche (Head-Terms).
 - **🎯 Intelligente Change-Metriken:** Taggt Keywords automatisch nach harten Ranking-Grenzen (`New`, `OoTop3`, `OoTop10`, `OoSERP2`, `OoTop100`, `IntoTop10`). Mikro-Schwankungen (< 1.0) werden sauber als `None` aussortiert.
 - **Traffic-Verlust Schätzung:** Nutzt ein klassisches Klickraten-Modell (CTR), um den echten Traffic-Impact zu schätzen (Platz 1 = 30%, Platz 2 = 15%, etc.).
 - **Monetärer Impact (Traffic Value):** Multipliziert verlorene Klicks mit dem jeweiligen Keyword-CPC, um das AdWords-Äquivalent in Euro darzustellen.
-- **📊 Interaktives KPI-Dashboard:** Zeigt direkt nach dem Upload den Netto-Traffic, die schlimmsten Top-3-Abstürze und die Performance deiner Themen-Cluster grafisch an.
+- **🎨 Premium Visual Loader:** Custom Lade-Overlay im MindBlow-Branding (Weinrot `#993333` Spinner mit weichem Hintergrund-Blur) für ein flüssiges Nutzererlebnis beim Tab-Wechsel.
+- **📊 Interaktives KPI-Dashboard:** Zeigt direkt nach dem Upload den Netto-Traffic, die schlimmsten Top-3-Abstürze, Search-Intent-Verteilungen und die Performance deiner Themen-Cluster grafisch an.
+- **⚙️ Git-basierte Versionierung:** Automatische Anzeige der Versionsnummer (Commit-Count) und des Git-Hashes im Footer.
 
 ---
 
@@ -74,4 +79,6 @@ Das Projekt ist "Cloud Ready" und kann in wenigen Klicks kostenlos gehostet werd
 ## 📝 Lizenz & Credits
 
 MIT License © 2026 Benjamin "SEOux Indianer" Wingerter 
+Mitentwickelt von Antigravity (KI-Coding-Assistent von Google DeepMind)
+
 Made with ❤️ in Munich & Bangkok: [seouxindianer.de](https://seouxindianer.de)
