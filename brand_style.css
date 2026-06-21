@@ -91,7 +91,8 @@ hr.hr--black, .stMarkdown hr.hr--black { background-color: #232323 !important; }
 }
 
 /* --- Streamlit Containers styled as Cards --- */
-[data-testid="stVerticalBlockBorderWrapper"] {
+[data-testid="stVerticalBlockBorderWrapper"],
+.st-key-exec_summary_container {
     background-color: #ffffff !important;
     border: 1px solid #dfdfdf !important;
     border-radius: 14px !important;
@@ -99,6 +100,14 @@ hr.hr--black, .stMarkdown hr.hr--black { background-color: #232323 !important; }
     padding: 1.5rem !important;
     margin-bottom: 1rem !important;
 }
+
+/* Ensure inner elements of keyed container also have white background */
+.st-key-exec_summary_container > div,
+.st-key-exec_summary_container [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-exec_summary_container [data-testid="stVerticalBlock"] {
+    background-color: #ffffff !important;
+}
+
 
 /* --- Interactive Elements (Buttons) --- */
 .stButton > button {

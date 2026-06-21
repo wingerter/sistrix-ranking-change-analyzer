@@ -763,7 +763,7 @@ I recommend focusing on the <strong style='color: #90c274;'>{lhf_count} Threshol
     kpi_col1, kpi_col2 = st.columns([5, 3])
     
     with kpi_col1:
-        with st.container(border=True):
+        with st.container(border=True, key="exec_summary_container"):
             st.markdown(
                 f"""<h3 style='margin-top: 0; margin-bottom: 1rem; font-family: "Raleway", sans-serif; font-weight: 800; color: #232323;'>
 {story_title}
